@@ -1,0 +1,14 @@
+# 秘密鍵・認証情報
+credentials/*
+!credentials/.gitkeep
+
+# 元データ
+data/*
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env

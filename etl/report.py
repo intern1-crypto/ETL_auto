@@ -1,0 +1,257 @@
+"""日報データ（Google フォーム）の抽出・加工。
+
+旧フォームと新フォームの 2 種類を扱う。
+
+戻り値:
+    build_old(...) -> (bq_report, df9, form_structure)
+    build_new(...) -> bq_report2
+"""
+
+import pandas as pd
+from gspread_dataframe import set_with_dataframe
+
+from . import config
+from .store_mapping import inverse_store_dict, store_dict, store_dict_report
+from .utils import add_section_to_items, fix_shift_in_at
+
+# 全店共通の出力カラム
+QUESTIONS_COMMON = [
+    "responseId", "timestamp", "store_code", "store", "staff_number",
+    "staff_name", "shift-in_at", "customer_count", "target_count",
+    "non-announcement", "invitation",
+]
+
+RENAME_MAPPING = {
+    "対象数": "target_count",
+    "スタッフ名（フルネーム）": "staff_name",
+    "スタッフナンバー（7桁）": "staff_number",
+    "シフトイン日時": "shift-in_at",
+    "非接客時間（OP / CL / 貸切 / 席利用シフト）": "non-serving_time",
+    "接客時間（日中 / PICSシフト）": "serving_time",
+    "接客数": "customer_count",
+    "未告知数": "non-announcement",
+    "誘致数": "invitation",
+}
+
+# 店舗別シート書き出し時の日本語カラム名
+DICT_JP = {
+    "staff_name": "スタッフ名",
+    "staff_number": "スタッフナンバー",
+    "shift-in_at": "シフトイン日時",
+    "customer_count": "接客数",
+    "non-announcement": "未告知数",
+    "invitation": "誘致数",
+    "store": "店舗",
+    "store_code": "店舗番号",
+    "target_count": "対象数",
+}
+
+
+def _fetch_responses(service, form_id):
+    """フォームの回答を全件取得する（1回のリクエストで最大5000件）。"""
+    responses = []
+    page_token = None
+    while True:
+        response = (
+            service.forms()
+            .responses()
+            .list(formId=form_id, pageSize=5000, pageToken=page_token)
+            .execute()
+        )
+        responses.extend(response.get("responses", []))
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            break
+    return responses
+
+
+def _responses_to_df(responses):
+    """回答を質問IDをカラムとした DataFrame に変換する。"""
+    data = []
+    for res in responses:
+        row = {
+            "responseId": res["responseId"],
+            "timestamp": res["createTime"],
+        }
+        for question_id, answer in res.get("answers", {}).items():
+            row[question_id] = (
+                answer.get("textAnswers", {}).get("answers", [{}])[0].get("value", "")
+            )
+        data.append(row)
+    return pd.DataFrame(data)
+
+
+def _get_form_structure(service, form_id):
+    """フォームの構造を取得し、各質問に section（店舗番号）を付与する。"""
+    form = service.forms().get(formId=form_id).execute()
+    return add_section_to_items(form.get("items", []))
+
+
+def _common_question_mapping(form_structure):
+    """全店共通セクション（section == 0）の質問ID -> 質問内容マップを作成する。"""
+    mapping = {}
+    for item in form_structure:
+        if item.get("section", {}) != 0:
+            continue
+        question_id = (
+            item.get("questionItem", {}).get("question", {}).get("questionId", "No ID")
+        )
+        mapping[question_id] = item.get("title", {})
+    return mapping
+
+
+def _common_datetime_and_ints(df9):
+    """timestamp・数値カラム・shift-in_at・スタッフ名などの共通加工を行う。"""
+    df9["timestamp"] = pd.to_datetime(df9["timestamp"], format="mixed")
+    # 標準時から日本時間に
+    df9["timestamp"] = df9["timestamp"].dt.tz_convert("Asia/Tokyo")
+
+    # 一旦浮動小数点型にしてから整数型に
+    cols = ["staff_number", "target_count", "customer_count", "non-announcement"]
+    df9[cols] = df9[cols].astype(float).astype(int)
+
+    # 数字でないものは0に
+    df9["invitation"] = (
+        df9["invitation"].apply(pd.to_numeric, errors="coerce").fillna(0).astype(int)
+    )
+
+    # shift-in_at は途中まで年がないため timestamp から補完
+    df9["shift-in_at"] = df9.apply(
+        lambda row: fix_shift_in_at(row["shift-in_at"], row["timestamp"]), axis=1
+    )
+
+    # シフトイン日時とスタッフナンバーが重複している「先のデータ」を削除
+    original_len = len(df9)
+    df9 = df9[~df9.duplicated(subset=["shift-in_at", "staff_number"], keep="last")]
+    print(f"削除された重複行数: {original_len - len(df9)} 行")
+
+    # タイムゾーン情報を落として naive datetime に
+    df9["timestamp"] = pd.to_datetime(df9["timestamp"].dt.strftime("%Y-%m-%d %H:%M:%S"))
+    df9["shift-in_at"] = pd.to_datetime(
+        df9["shift-in_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
+    )
+
+    # スタッフ名から半角・全角スペースを除く
+    df9["staff_name"] = df9["staff_name"].str.replace(r"[ 　]+", "", regex=True)
+
+    return df9
+
+
+def build_old(service):
+    """旧フォームの日報を構築して (bq_report, df9, form_structure) を返す。"""
+    responses = _fetch_responses(service, config.REPORT_FORM_ID_OLD)
+    df_report_raw = _responses_to_df(responses)
+
+    form_structure = _get_form_structure(service, config.REPORT_FORM_ID_OLD)
+    question_mapping_common = _common_question_mapping(form_structure)
+    df_report_raw.rename(columns=question_mapping_common, inplace=True)
+
+    df9 = df_report_raw.copy()
+
+    # 旧フォーム専用の表記ゆれマップで店舗番号をマッピング
+    df9["store_code"] = df9["店舗名（シフトインした店舗）"].map(store_dict_report)
+    if df9["店舗名（シフトインした店舗）"].count() == df9["store_code"].count():
+        print("マッピング成功")
+    else:
+        print("マッピングに漏れあり")
+        print(df9[df9["store_code"].isnull()]["店舗名（シフトインした店舗）"].unique())
+
+    # 検証用（999）を除外
+    df9 = df9[df9["store_code"] != 999]
+
+    # 正規の店舗名を店舗番号からマッピング
+    df9["store"] = df9["store_code"].map(inverse_store_dict)
+    df9.drop(columns=["店舗名（シフトインした店舗）"], inplace=True)
+
+    # timestamp をもとに昇順に並べる
+    df9.sort_values(by="timestamp", ascending=True, inplace=True)
+    df9.reset_index(drop=True, inplace=True)
+
+    df9.rename(columns=RENAME_MAPPING, inplace=True)
+    df9 = _common_datetime_and_ints(df9)
+
+    bq_report = df9[QUESTIONS_COMMON].copy()
+
+    return bq_report, df9, form_structure
+
+
+def build_new(service):
+    """新フォームの日報を構築して bq_report2 を返す。"""
+    responses = _fetch_responses(service, config.REPORT_FORM_ID_NEW)
+    df_report_raw = _responses_to_df(responses)
+
+    form_structure = _get_form_structure(service, config.REPORT_FORM_ID_NEW)
+    question_mapping_common = _common_question_mapping(form_structure)
+    df_report_raw.rename(columns=question_mapping_common, inplace=True)
+
+    df9 = df_report_raw.copy()
+
+    # 新フォームは標準の store_dict でマッピング
+    df9["store_code"] = df9["店舗名（シフトインした店舗）"].map(store_dict)
+    if df9["店舗名（シフトインした店舗）"].count() == df9["store_code"].count():
+        print("マッピング成功")
+    else:
+        print("マッピングに漏れあり")
+        print(df9[df9["store_code"].isnull()]["店舗名（シフトインした店舗）"].unique())
+
+    # timestamp をもとに昇順に並べる
+    df9.sort_values(by="timestamp", ascending=True, inplace=True)
+    df9.reset_index(drop=True, inplace=True)
+
+    # 新フォームは店舗名カラムを 'store' にリネームして保持
+    rename_new = dict(RENAME_MAPPING)
+    rename_new["店舗名（シフトインした店舗）"] = "store"
+    df9.rename(columns=rename_new, inplace=True)
+
+    df9 = _common_datetime_and_ints(df9)
+
+    bq_report2 = df9[QUESTIONS_COMMON].copy()
+
+    return bq_report2
+
+
+def write_store_report_sheets(gc, df9, form_structure, bq_report, spreadsheet_url, start_date):
+    """店舗ごとの日報を対象スプレッドシートの店舗番号シートへ書き出す（任意機能）。"""
+    import gspread
+
+    spreadsheet = gc.open_by_url(spreadsheet_url)
+    start_date = pd.to_datetime(start_date)
+
+    # 質問ID -> 質問内容マップ（全店分）
+    question_mapping = {}
+    for item in form_structure:
+        question_id = (
+            item.get("questionItem", {}).get("question", {}).get("questionId", "No ID")
+        )
+        question_mapping[question_id] = item.get("title", {})
+
+    stores = sorted(bq_report["store_code"].unique().tolist())
+
+    for store_code in stores:
+        questions_store = []
+        for item in form_structure:
+            if item.get("section", {}) == store_code:
+                question_id = (
+                    item.get("questionItem", {})
+                    .get("question", {})
+                    .get("questionId", "No ID")
+                )
+                if question_id in df9.columns:
+                    questions_store.append(question_id)
+
+        df_store = df9[QUESTIONS_COMMON + questions_store]
+        df_store = df_store[df_store["store_code"] == store_code]
+        df_store = df_store[df_store["timestamp"] > start_date]
+
+        df_store.rename(columns=question_mapping, inplace=True)
+        df_store.rename(columns=DICT_JP, inplace=True)
+
+        try:
+            worksheet = spreadsheet.worksheet(str(store_code))
+            worksheet.clear()
+        except gspread.exceptions.WorksheetNotFound:
+            worksheet = spreadsheet.add_worksheet(
+                title=str(store_code), rows="5000", cols="30"
+            )
+        set_with_dataframe(worksheet, df_store)
+        print(f"{store_code}データ書き込み完了！")
