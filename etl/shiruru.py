@@ -34,33 +34,31 @@ def build(gc):
     print(f"{ss_srr.title}を開きました")
 
     # 数式の結果を取得してデータフレーム化
-    df_ss_srr = get_as_dataframe(ss_srr.get_worksheet(0), evaluate_formulas=True)
-
-    dfsr = df_ss_srr.copy()
+    df_srr = get_as_dataframe(ss_srr.get_worksheet(0), evaluate_formulas=True)
 
     # 店舗名をもとに店舗番号をマッピング
-    dfsr["店舗番号"] = dfsr["店舗名"].map(store_dict)
-    if dfsr["店舗名"].count() == dfsr["店舗番号"].count():
+    df_srr["店舗番号"] = df_srr["店舗名"].map(store_dict)
+    if df_srr["店舗名"].count() == df_srr["店舗番号"].count():
         print("マッピング成功")
     else:
         print("マッピングに漏れあり")
-        print(dfsr[dfsr["店舗番号"].isnull()]["店舗名"].unique())
+        print(df_srr[df_srr["店舗番号"].isnull()]["店舗名"].unique())
 
     # 不要カラムを削除
-    dfsr.drop(
+    df_srr.drop(
         columns=["Unnamed: 21", "SCREEN条件", "KOKUSAI条件", "アクション形態", "卒業年月"],
         inplace=True,
     )
 
     # 日時型に
-    dfsr["日時"] = pd.to_datetime(dfsr["日時"], errors="coerce")
-    dfsr["修正_日時"] = pd.to_datetime(dfsr["修正_日時"]).dt.date
+    df_srr["日時"] = pd.to_datetime(df_srr["日時"], errors="coerce")
+    df_srr["修正_日時"] = pd.to_datetime(df_srr["修正_日時"]).dt.date
 
     # NaN を 0 に変えて int に変換
-    dfsr["会員ID"] = dfsr["会員ID"].fillna(0).astype(int)
-    dfsr["配布判定"] = dfsr["配布判定"].fillna(0).astype(int)
-    dfsr["店舗番号"] = dfsr["店舗番号"].fillna(0).astype(int)
+    df_srr["会員ID"] = df_srr["会員ID"].fillna(0).astype(int)
+    df_srr["配布判定"] = df_srr["配布判定"].fillna(0).astype(int)
+    df_srr["店舗番号"] = df_srr["店舗番号"].fillna(0).astype(int)
 
-    dfsr.rename(columns=COLUMN_MAPPING, inplace=True)
+    df_srr.rename(columns=COLUMN_MAPPING, inplace=True)
 
-    return dfsr
+    return df_srr

@@ -3,8 +3,8 @@
 旧フォームと新フォームの 2 種類を扱う。
 
 戻り値:
-    build_old(...) -> (bq_report, df9, form_structure)
-    build_new(...) -> bq_report2
+    build_old(...) -> (bq_report, df_report_old, form_structure)
+    build_new(...) -> bq_report_new
 """
 
 import pandas as pd
@@ -100,45 +100,54 @@ def _common_question_mapping(form_structure):
     return mapping
 
 
-def _common_datetime_and_ints(df9):
+def _common_datetime_and_ints(df_report):
     """timestamp・数値カラム・shift-in_at・スタッフ名などの共通加工を行う。"""
-    df9["timestamp"] = pd.to_datetime(df9["timestamp"], format="mixed")
+    df_report["timestamp"] = pd.to_datetime(df_report["timestamp"], format="mixed")
     # 標準時から日本時間に
-    df9["timestamp"] = df9["timestamp"].dt.tz_convert("Asia/Tokyo")
+    df_report["timestamp"] = df_report["timestamp"].dt.tz_convert("Asia/Tokyo")
 
     # 一旦浮動小数点型にしてから整数型に
     cols = ["staff_number", "target_count", "customer_count", "non-announcement"]
-    df9[cols] = df9[cols].astype(float).astype(int)
+    df_report[cols] = df_report[cols].astype(float).astype(int)
 
     # 数字でないものは0に
-    df9["invitation"] = (
-        df9["invitation"].apply(pd.to_numeric, errors="coerce").fillna(0).astype(int)
+    df_report["invitation"] = (
+        df_report["invitation"]
+        .apply(pd.to_numeric, errors="coerce")
+        .fillna(0)
+        .astype(int)
     )
 
     # shift-in_at は途中まで年がないため timestamp から補完
-    df9["shift-in_at"] = df9.apply(
+    df_report["shift-in_at"] = df_report.apply(
         lambda row: fix_shift_in_at(row["shift-in_at"], row["timestamp"]), axis=1
     )
 
     # シフトイン日時とスタッフナンバーが重複している「先のデータ」を削除
-    original_len = len(df9)
-    df9 = df9[~df9.duplicated(subset=["shift-in_at", "staff_number"], keep="last")]
-    print(f"削除された重複行数: {original_len - len(df9)} 行")
+    original_len = len(df_report)
+    df_report = df_report[
+        ~df_report.duplicated(subset=["shift-in_at", "staff_number"], keep="last")
+    ]
+    print(f"削除された重複行数: {original_len - len(df_report)} 行")
 
     # タイムゾーン情報を落として naive datetime に
-    df9["timestamp"] = pd.to_datetime(df9["timestamp"].dt.strftime("%Y-%m-%d %H:%M:%S"))
-    df9["shift-in_at"] = pd.to_datetime(
-        df9["shift-in_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
+    df_report["timestamp"] = pd.to_datetime(
+        df_report["timestamp"].dt.strftime("%Y-%m-%d %H:%M:%S")
+    )
+    df_report["shift-in_at"] = pd.to_datetime(
+        df_report["shift-in_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
     )
 
     # スタッフ名から半角・全角スペースを除く
-    df9["staff_name"] = df9["staff_name"].str.replace(r"[ 　]+", "", regex=True)
+    df_report["staff_name"] = df_report["staff_name"].str.replace(
+        r"[ 　]+", "", regex=True
+    )
 
-    return df9
+    return df_report
 
 
 def build_old(service):
-    """旧フォームの日報を構築して (bq_report, df9, form_structure) を返す。"""
+    """旧フォームの日報を構築して (bq_report, df_report_old, form_structure) を返す。"""
     responses = _fetch_responses(service, config.REPORT_FORM_ID_OLD)
     df_report_raw = _responses_to_df(responses)
 
@@ -146,37 +155,46 @@ def build_old(service):
     question_mapping_common = _common_question_mapping(form_structure)
     df_report_raw.rename(columns=question_mapping_common, inplace=True)
 
-    df9 = df_report_raw.copy()
+    df_report_old = df_report_raw.copy()
 
     # 旧フォーム専用の表記ゆれマップで店舗番号をマッピング
-    df9["store_code"] = df9["店舗名（シフトインした店舗）"].map(store_dict_report)
-    if df9["店舗名（シフトインした店舗）"].count() == df9["store_code"].count():
+    df_report_old["store_code"] = df_report_old["店舗名（シフトインした店舗）"].map(
+        store_dict_report
+    )
+    if (
+        df_report_old["店舗名（シフトインした店舗）"].count()
+        == df_report_old["store_code"].count()
+    ):
         print("マッピング成功")
     else:
         print("マッピングに漏れあり")
-        print(df9[df9["store_code"].isnull()]["店舗名（シフトインした店舗）"].unique())
+        print(
+            df_report_old[df_report_old["store_code"].isnull()][
+                "店舗名（シフトインした店舗）"
+            ].unique()
+        )
 
     # 検証用（999）を除外
-    df9 = df9[df9["store_code"] != 999]
+    df_report_old = df_report_old[df_report_old["store_code"] != 999]
 
     # 正規の店舗名を店舗番号からマッピング
-    df9["store"] = df9["store_code"].map(inverse_store_dict)
-    df9.drop(columns=["店舗名（シフトインした店舗）"], inplace=True)
+    df_report_old["store"] = df_report_old["store_code"].map(inverse_store_dict)
+    df_report_old.drop(columns=["店舗名（シフトインした店舗）"], inplace=True)
 
     # timestamp をもとに昇順に並べる
-    df9.sort_values(by="timestamp", ascending=True, inplace=True)
-    df9.reset_index(drop=True, inplace=True)
+    df_report_old.sort_values(by="timestamp", ascending=True, inplace=True)
+    df_report_old.reset_index(drop=True, inplace=True)
 
-    df9.rename(columns=RENAME_MAPPING, inplace=True)
-    df9 = _common_datetime_and_ints(df9)
+    df_report_old.rename(columns=RENAME_MAPPING, inplace=True)
+    df_report_old = _common_datetime_and_ints(df_report_old)
 
-    bq_report = df9[QUESTIONS_COMMON].copy()
+    bq_report = df_report_old[QUESTIONS_COMMON].copy()
 
-    return bq_report, df9, form_structure
+    return bq_report, df_report_old, form_structure
 
 
 def build_new(service):
-    """新フォームの日報を構築して bq_report2 を返す。"""
+    """新フォームの日報を構築して bq_report_new を返す。"""
     responses = _fetch_responses(service, config.REPORT_FORM_ID_NEW)
     df_report_raw = _responses_to_df(responses)
 
@@ -184,33 +202,44 @@ def build_new(service):
     question_mapping_common = _common_question_mapping(form_structure)
     df_report_raw.rename(columns=question_mapping_common, inplace=True)
 
-    df9 = df_report_raw.copy()
+    df_report_new = df_report_raw.copy()
 
     # 新フォームは標準の store_dict でマッピング
-    df9["store_code"] = df9["店舗名（シフトインした店舗）"].map(store_dict)
-    if df9["店舗名（シフトインした店舗）"].count() == df9["store_code"].count():
+    df_report_new["store_code"] = df_report_new["店舗名（シフトインした店舗）"].map(
+        store_dict
+    )
+    if (
+        df_report_new["店舗名（シフトインした店舗）"].count()
+        == df_report_new["store_code"].count()
+    ):
         print("マッピング成功")
     else:
         print("マッピングに漏れあり")
-        print(df9[df9["store_code"].isnull()]["店舗名（シフトインした店舗）"].unique())
+        print(
+            df_report_new[df_report_new["store_code"].isnull()][
+                "店舗名（シフトインした店舗）"
+            ].unique()
+        )
 
     # timestamp をもとに昇順に並べる
-    df9.sort_values(by="timestamp", ascending=True, inplace=True)
-    df9.reset_index(drop=True, inplace=True)
+    df_report_new.sort_values(by="timestamp", ascending=True, inplace=True)
+    df_report_new.reset_index(drop=True, inplace=True)
 
     # 新フォームは店舗名カラムを 'store' にリネームして保持
     rename_new = dict(RENAME_MAPPING)
     rename_new["店舗名（シフトインした店舗）"] = "store"
-    df9.rename(columns=rename_new, inplace=True)
+    df_report_new.rename(columns=rename_new, inplace=True)
 
-    df9 = _common_datetime_and_ints(df9)
+    df_report_new = _common_datetime_and_ints(df_report_new)
 
-    bq_report2 = df9[QUESTIONS_COMMON].copy()
+    bq_report_new = df_report_new[QUESTIONS_COMMON].copy()
 
-    return bq_report2
+    return bq_report_new
 
 
-def write_store_report_sheets(gc, df9, form_structure, bq_report, spreadsheet_url, start_date):
+def write_store_report_sheets(
+    gc, df_report, form_structure, bq_report, spreadsheet_url, start_date
+):
     """店舗ごとの日報を対象スプレッドシートの店舗番号シートへ書き出す（任意機能）。"""
     import gspread
 
@@ -236,10 +265,10 @@ def write_store_report_sheets(gc, df9, form_structure, bq_report, spreadsheet_ur
                     .get("question", {})
                     .get("questionId", "No ID")
                 )
-                if question_id in df9.columns:
+                if question_id in df_report.columns:
                     questions_store.append(question_id)
 
-        df_store = df9[QUESTIONS_COMMON + questions_store]
+        df_store = df_report[QUESTIONS_COMMON + questions_store]
         df_store = df_store[df_store["store_code"] == store_code]
         df_store = df_store[df_store["timestamp"] > start_date]
 

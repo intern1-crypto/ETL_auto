@@ -9,41 +9,43 @@ import pandas as pd
 from .store_mapping import inverse_store_dict
 
 
-def _aggregate_visits(df4):
+def _aggregate_visits(df_order):
     """来店データを日付・店舗ごとに集計する。"""
-    df_visiter = df4.copy()
-    df_visiter["date"] = df_visiter["ordered_at"].dt.date
+    df_daily_visits = df_order.copy()
+    df_daily_visits["date"] = df_daily_visits["ordered_at"].dt.date
 
     # date と store_code ごとに総来店(visit_total)と DU(visit_du) を集計
-    df_visiter = df_visiter.groupby(["date", "store_code"])["conected_id"].agg(
+    df_daily_visits = df_daily_visits.groupby(["date", "store_code"])["conected_id"].agg(
         visit_total="count",  # 行数（全体のカウント）
         visit_du="nunique",  # ユニークな値の個数
     )
-    return df_visiter.reset_index()
+    return df_daily_visits.reset_index()
 
 
-def _aggregate_meetup(df5):
+def _aggregate_meetup(df_meetup_bq):
     """Meetup データを日付・店舗ごとに集計する。"""
-    df8 = df5.copy()
-    df8["date"] = df8["start_at"].dt.date
+    df_daily_meetup = df_meetup_bq.copy()
+    df_daily_meetup["date"] = df_daily_meetup["start_at"].dt.date
 
     # キャンセル有無を1,0に
-    df8["cancell"] = df8["cancell"].notnull().astype(int)
+    df_daily_meetup["cancell"] = df_daily_meetup["cancell"].notnull().astype(int)
 
     # date, store_code 毎に参加・参加予定・キャンセルのそれぞれの合計
-    df8 = df8.groupby(["date", "store_code"])[
+    df_daily_meetup = df_daily_meetup.groupby(["date", "store_code"])[
         ["attendance", "planned_attendance", "cancell"]
     ].sum()
-    return df8.reset_index()
+    return df_daily_meetup.reset_index()
 
 
-def build(df4, df5):
-    """来店データ(df4)と Meetup データ(df5)から df_daily を構築する。"""
-    df_visiter = _aggregate_visits(df4)
-    df8 = _aggregate_meetup(df5)
+def build(df_order, df_meetup_bq):
+    """来店データ(df_order)と Meetup データ(df_meetup_bq)から df_daily を構築する。"""
+    df_daily_visits = _aggregate_visits(df_order)
+    df_daily_meetup = _aggregate_meetup(df_meetup_bq)
 
     # 外部結合し、欠損値を0で埋める
-    df_daily = pd.merge(df_visiter, df8, on=["date", "store_code"], how="outer")
+    df_daily = pd.merge(
+        df_daily_visits, df_daily_meetup, on=["date", "store_code"], how="outer"
+    )
     df_daily.fillna(0, inplace=True)
 
     # 店舗番号から店舗名を付与し、カラム順を整える

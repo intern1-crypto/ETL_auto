@@ -9,17 +9,19 @@ import pandas as pd
 from .store_mapping import inverse_store_dict
 
 
-def _aggregate_order(df4):
+def _aggregate_order(df_order):
     """来店データから個人（結合ID）ごとの来店集計を作成する。"""
+    df_order = df_order.copy()
+
     user_columns_order = [
         "conected_id", "ordered_at", "store_code", "group", "grade",
         "university", "faculty", "DU_id",
     ]
 
-    df4["ordered_at"] = pd.to_datetime(df4["ordered_at"])
+    df_order["ordered_at"] = pd.to_datetime(df_order["ordered_at"])
 
     # DU（DU_id）のみを残す
-    df_du = df4.drop_duplicates(subset="DU_id")
+    df_du = df_order.drop_duplicates(subset="DU_id")
 
     df_user_order = (
         df_du[user_columns_order]
@@ -39,7 +41,7 @@ def _aggregate_order(df4):
     # 今年度4月以降の来店数
     this_year_april = pd.Timestamp(year=pd.Timestamp.today().year, month=4, day=1)
     df_visit_since_april = (
-        df4[df4["ordered_at"] >= this_year_april]
+        df_order[df_order["ordered_at"] >= this_year_april]
         .groupby("conected_id")
         .agg(visit_since_april=("DU_id", "nunique"))
         .reset_index()
@@ -54,10 +56,11 @@ def _aggregate_order(df4):
     return df_user_order
 
 
-def _aggregate_meetup(df2):
+def _aggregate_meetup(df_meetup):
     """Meetup データから個人（結合ID）ごとの参加集計を作成する。"""
-    df_user_meetup = df2.copy()
-    df_user_meetup["キャンセル"] = df_user_meetup["キャンセル有無"].notnull()
+    df_meetup = df_meetup.copy()
+    df_meetup["キャンセル"] = df_meetup["キャンセル有無"].notnull()
+    df_meetup["イベント開始日時"] = pd.to_datetime(df_meetup["イベント開始日時"])
 
     user_columns_meetup = [
         "結合ID", "イベント開始日時", "会員ID", "大学", "学部", "学年",
@@ -65,7 +68,7 @@ def _aggregate_meetup(df2):
     ]
 
     df_user_meetup = (
-        df_user_meetup[user_columns_meetup]
+        df_meetup[user_columns_meetup]
         .groupby("結合ID")
         .agg(
             attendance=("参加", "sum"),
@@ -85,10 +88,9 @@ def _aggregate_meetup(df2):
     df_user_meetup.rename(columns={"結合ID": "conected_id"}, inplace=True)
 
     # 今年度4月以降の参加数
-    df2["イベント開始日時"] = pd.to_datetime(df2["イベント開始日時"])
     this_year_april = pd.Timestamp(year=pd.Timestamp.today().year, month=4, day=1)
     df_meetup_since_april = (
-        df2[df2["イベント開始日時"] >= this_year_april]
+        df_meetup[df_meetup["イベント開始日時"] >= this_year_april]
         .groupby("結合ID")
         .agg(attendance_since_april=("参加", "sum"))
         .reset_index()
@@ -105,10 +107,10 @@ def _aggregate_meetup(df2):
     return df_user_meetup
 
 
-def build(df4, df2):
-    """来店データ(df4)と Meetup データ(df2)から bq_user を構築する。"""
-    df_user_order = _aggregate_order(df4)
-    df_user_meetup = _aggregate_meetup(df2)
+def build(df_order, df_meetup):
+    """来店データ(df_order)と Meetup データ(df_meetup)から bq_user を構築する。"""
+    df_user_order = _aggregate_order(df_order)
+    df_user_meetup = _aggregate_meetup(df_meetup)
 
     # 結合IDをキーとして結合
     df_user = pd.merge(df_user_order, df_user_meetup, on="conected_id", how="outer")

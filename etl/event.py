@@ -33,11 +33,11 @@ COLUMN_MAPPING = {
 def _extract(gc):
     """CSV とスプレッドシートからイベントデータを抽出・結合する。"""
     folder = config.DATA_DIR / config.EVENT_CSV_SUBDIR
-    df6 = read_csv_folder(folder, encodings=("cp932",))
+    df_event_raw = read_csv_folder(folder, encodings=("cp932",))
 
-    df6["予約日"] = pd.to_datetime(df6["予約日"], format="mixed").dt.date
-    df6["作成日"] = pd.to_datetime(df6["作成日"], format="mixed")
-    df6["キャンセル日"] = pd.to_datetime(df6["キャンセル日"], format="mixed")
+    df_event_raw["予約日"] = pd.to_datetime(df_event_raw["予約日"], format="mixed").dt.date
+    df_event_raw["作成日"] = pd.to_datetime(df_event_raw["作成日"], format="mixed")
+    df_event_raw["キャンセル日"] = pd.to_datetime(df_event_raw["キャンセル日"], format="mixed")
 
     # スプレッドシートを開く
     ss_event = gc.open_by_url(config.EVENT_SPREADSHEET_URL)
@@ -55,28 +55,32 @@ def _extract(gc):
     print(f"{len_before - len(df_ss_event)}行のデータが削除されました")
 
     # CSV データとスプレッドシートデータの結合・重複削除
-    df6 = pd.concat([df6, df_ss_event], join="outer", ignore_index=True)
-    df6 = df6.drop_duplicates()
+    df_event_raw = pd.concat([df_event_raw, df_ss_event], join="outer", ignore_index=True)
+    df_event_raw = df_event_raw.drop_duplicates()
 
-    return df6
+    return df_event_raw
 
 
-def _process(df6):
-    """イベントデータを加工する。"""
-    df7 = df6.copy()
+def _process(df_event_raw):
+    """イベントデータを加工して bq_event を作成する。"""
+    bq_event = df_event_raw.copy()
 
     # 開始日時と終了日時を作成
-    df7["開始日時"] = pd.to_datetime(df7["予約日"].astype(str) + " " + df7["開始時間"])
-    df7["終了日時"] = pd.to_datetime(df7["予約日"].astype(str) + " " + df7["終了時間"])
-    df7.drop(columns=["開始時間", "終了時間", "予約日"], inplace=True)
+    bq_event["開始日時"] = pd.to_datetime(
+        bq_event["予約日"].astype(str) + " " + bq_event["開始時間"]
+    )
+    bq_event["終了日時"] = pd.to_datetime(
+        bq_event["予約日"].astype(str) + " " + bq_event["終了時間"]
+    )
+    bq_event.drop(columns=["開始時間", "終了時間", "予約日"], inplace=True)
 
     # 整数型に
-    df7 = df7.astype(
+    bq_event = bq_event.astype(
         {"予約ID": int, "企業様人数": int, "学生参加枠": int, "学生参加人数": int}
     )
 
     # カラムを絞る
-    df7 = df7[
+    bq_event = bq_event[
         [
             "予約ID", "お客様企業名", "店舗名", "開催状態", "予約形態", "企業様人数",
             "学生参加枠", "対象卒年(Meetup)", "タイプ(Meetup)", "学生予約人数",
@@ -84,7 +88,7 @@ def _process(df6):
         ]
     ]
 
-    df7 = df7.replace(
+    bq_event = bq_event.replace(
         {
             "タイプ(Meetup)": {
                 "オンラインMeetup (自宅から参加)": "オンライン",
@@ -93,14 +97,14 @@ def _process(df6):
         }
     )
 
-    df7.rename(columns={"予約ID": "イベントID"}, inplace=True)
-    df7 = df7.rename(columns=COLUMN_MAPPING)
+    bq_event.rename(columns={"予約ID": "イベントID"}, inplace=True)
+    bq_event = bq_event.rename(columns=COLUMN_MAPPING)
 
-    return df7
+    return bq_event
 
 
 def build(gc):
     """イベントデータを構築して bq_event を返す。"""
-    df6 = _extract(gc)
-    bq_event = _process(df6)
+    df_event_raw = _extract(gc)
+    bq_event = _process(df_event_raw)
     return bq_event

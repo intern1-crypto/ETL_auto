@@ -1,8 +1,8 @@
 """参加データ（Meetup 参加者）の抽出・加工。
 
 戻り値:
-    df2        : 個人データ集計（user モジュール）でも使う加工前の全カラム版
-    bq_meetup  : BigQuery 出力用（df5 相当、英語カラム名）
+    df_meetup : 個人データ集計（user モジュール）でも使う加工済み全カラム版（日本語カラム名）
+    bq_meetup : BigQuery 出力用（英語カラム名）
 """
 
 import numpy as np
@@ -48,8 +48,8 @@ def _extract(gc):
     from .utils import read_csv_folder
 
     folder = config.DATA_DIR / config.MEETUP_CSV_SUBDIR
-    df1 = read_csv_folder(folder, encodings=("cp932",))
-    df1["イベント日"] = pd.to_datetime(df1["イベント日"])
+    df_meetup_raw = read_csv_folder(folder, encodings=("cp932",))
+    df_meetup_raw["イベント日"] = pd.to_datetime(df_meetup_raw["イベント日"])
 
     # スプレッドシートを開く
     ss_meetup = gc.open_by_url(config.MEETUP_SPREADSHEET_URL)
@@ -71,68 +71,70 @@ def _extract(gc):
     ).dt.strftime("%Y-%m-%d %H:%M:%S")
 
     # CSV データとスプレッドシートデータを外部結合し、重複削除
-    df1 = pd.concat([df1, df_ss_meetup], join="outer", ignore_index=True)
-    len_before = len(df1)
-    df1.drop_duplicates(inplace=True)
-    print(f"{len_before - len(df1)}行の重複データが削除されました")
+    df_meetup_raw = pd.concat([df_meetup_raw, df_ss_meetup], join="outer", ignore_index=True)
+    len_before = len(df_meetup_raw)
+    df_meetup_raw.drop_duplicates(inplace=True)
+    print(f"{len_before - len(df_meetup_raw)}行の重複データが削除されました")
 
-    return df1
+    return df_meetup_raw
 
 
-def _process(df1):
-    """参加データを加工して df2（全カラム）を作成する。"""
-    df2 = df1.copy()
+def _process(df_meetup_raw):
+    """参加データを加工して df_meetup（全カラム）を作成する。"""
+    df_meetup = df_meetup_raw.copy()
 
     # イベント時間から開始時刻を抽出し、開始・終了日時カラムを作成
-    df2["開始時刻"] = df2["イベント時間"].str.extract(r"(\d{2}:\d{2}:\d{2})")
-    df2["イベント開始日時"] = pd.to_datetime(
-        df2["イベント日"].astype(str) + " " + df2["開始時刻"]
+    df_meetup["開始時刻"] = df_meetup["イベント時間"].str.extract(r"(\d{2}:\d{2}:\d{2})")
+    df_meetup["イベント開始日時"] = pd.to_datetime(
+        df_meetup["イベント日"].astype(str) + " " + df_meetup["開始時刻"]
     )
-    df2["イベント終了日時"] = df2["イベント開始日時"] + pd.Timedelta(hours=1)
-    df2.drop(columns=["開始時刻", "イベント時間"], inplace=True)
-    df2["イベント日"] = pd.to_datetime(df2["イベント日"]).dt.date
+    df_meetup["イベント終了日時"] = df_meetup["イベント開始日時"] + pd.Timedelta(hours=1)
+    df_meetup.drop(columns=["開始時刻", "イベント時間"], inplace=True)
+    df_meetup["イベント日"] = pd.to_datetime(df_meetup["イベント日"]).dt.date
 
     # 店舗名をもとに店舗番号をマッピング
-    df2["店舗番号"] = df2["店舗名"].map(store_dict)
-    if df2["店舗名"].count() == df2["店舗番号"].count():
+    df_meetup["店舗番号"] = df_meetup["店舗名"].map(store_dict)
+    if df_meetup["店舗名"].count() == df_meetup["店舗番号"].count():
         print("マッピング成功")
     else:
         print("マッピングに漏れあり")
-        print(df2[df2["店舗番号"].isnull()]["店舗名"].unique())
+        print(df_meetup[df_meetup["店舗番号"].isnull()]["店舗名"].unique())
 
-    df2 = df2.rename(columns={"予約ID": "MeetupID"})
-    df2["MeetupID"] = df2["MeetupID"].astype(int)
-    df2["会員ID"] = df2["会員ID"].astype(int)
+    df_meetup = df_meetup.rename(columns={"予約ID": "MeetupID"})
+    df_meetup["MeetupID"] = df_meetup["MeetupID"].astype(int)
+    df_meetup["会員ID"] = df_meetup["会員ID"].astype(int)
 
     # 参加：参加なら1, else 0
-    df2["参加可否"] = (df2["参加可否"] == "参加").astype(int)
-    df2 = df2.rename(columns={"参加可否": "参加"})
+    df_meetup["参加可否"] = (df_meetup["参加可否"] == "参加").astype(int)
+    df_meetup = df_meetup.rename(columns={"参加可否": "参加"})
 
     # 参加予定：参加してないかつキャンセル有無が欠損 → 1, else → 0
-    df2["参加予定"] = ((df2["参加"] == 0) & (df2["キャンセル有無"].isnull())).astype(int)
+    df_meetup["参加予定"] = (
+        (df_meetup["参加"] == 0) & (df_meetup["キャンセル有無"].isnull())
+    ).astype(int)
 
     # 開催形式を簡潔に言い換え
-    df2["開催形式"] = df2["開催形式"].replace(
+    df_meetup["開催形式"] = df_meetup["開催形式"].replace(
         {"オンラインMeetup": "オンライン", "Meetup (店舗開催)": "対面"}
     )
 
-    df2["予約ID"] = (
-        df2["イベント開始日時"].astype(str)
+    df_meetup["予約ID"] = (
+        df_meetup["イベント開始日時"].astype(str)
         + "_"
-        + df2["MeetupID"].astype(str)
+        + df_meetup["MeetupID"].astype(str)
         + "_"
-        + df2["結合ID"].astype(str)
+        + df_meetup["結合ID"].astype(str)
     )
 
-    df2["cancell"] = (df2["キャンセル有無"] == "キャンセル").astype(int)
-    df2["no_show"] = (df2["キャンセル有無"] == "無断欠席").astype(int)
+    df_meetup["cancell"] = (df_meetup["キャンセル有無"] == "キャンセル").astype(int)
+    df_meetup["no_show"] = (df_meetup["キャンセル有無"] == "無断欠席").astype(int)
 
-    return df2
+    return df_meetup
 
 
-def _to_bq(df2):
-    """df2 から BigQuery 出力用データフレーム（bq_meetup / df5）を作成する。"""
-    df5 = df2[
+def _to_bq(df_meetup):
+    """df_meetup から BigQuery 出力用データフレーム（bq_meetup）を作成する。"""
+    bq_meetup = df_meetup[
         [
             "予約ID", "イベント開始日時", "イベント終了日時", "MeetupID", "結合ID",
             "会員ID", "店舗番号", "店舗名", "企業名", "開催形式", "参加", "参加予定",
@@ -142,28 +144,28 @@ def _to_bq(df2):
         ]
     ].copy()
 
-    df5.rename(columns=COLUMN_MAPPING, inplace=True)
+    bq_meetup.rename(columns=COLUMN_MAPPING, inplace=True)
 
     # Pickup count
     cond_1 = (
-        (df5["attendance"] == 1) | (df5["planned_attendance"] == 1)
-    ) & (df5["Pickup1"] == "注力している")
-    cond_2 = ((df5["attendance"] == 1) | (df5["planned_attendance"] == 1)) & (
-        (df5["Pickup1"].isna()) | (df5["Pickup1"] == "注力していない")
+        (bq_meetup["attendance"] == 1) | (bq_meetup["planned_attendance"] == 1)
+    ) & (bq_meetup["Pickup1"] == "注力している")
+    cond_2 = ((bq_meetup["attendance"] == 1) | (bq_meetup["planned_attendance"] == 1)) & (
+        (bq_meetup["Pickup1"].isna()) | (bq_meetup["Pickup1"] == "注力していない")
     )
-    cond_3 = (df5["attendance"] == 0) & (df5["planned_attendance"] == 0)
+    cond_3 = (bq_meetup["attendance"] == 0) & (bq_meetup["planned_attendance"] == 0)
 
-    df5["Pickup"] = np.select([cond_1, cond_2, cond_3], [2, 1, 0], default=np.nan)
-    df5["Pickup"] = df5["Pickup"].fillna(0).astype(int)
+    bq_meetup["Pickup"] = np.select([cond_1, cond_2, cond_3], [2, 1, 0], default=np.nan)
+    bq_meetup["Pickup"] = bq_meetup["Pickup"].fillna(0).astype(int)
 
-    df5 = df5.drop(columns=["Pickup1"])
+    bq_meetup = bq_meetup.drop(columns=["Pickup1"])
 
-    return df5
+    return bq_meetup
 
 
 def build(gc):
-    """参加データを構築して (df2, bq_meetup) を返す。"""
-    df1 = _extract(gc)
-    df2 = _process(df1)
-    bq_meetup = _to_bq(df2)
-    return df2, bq_meetup
+    """参加データを構築して (df_meetup, bq_meetup) を返す。"""
+    df_meetup_raw = _extract(gc)
+    df_meetup = _process(df_meetup_raw)
+    bq_meetup = _to_bq(df_meetup)
+    return df_meetup, bq_meetup

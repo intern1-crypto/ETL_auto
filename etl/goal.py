@@ -42,37 +42,37 @@ def _build_daily_goal(ss_goal):
     df_ss_goal2 = get_as_dataframe(ss_goal.get_worksheet(2), evaluate_formulas=True)
 
     # 外部結合・重複削除
-    dfg = pd.concat([df_ss_goal, df_ss_goal2], join="outer", ignore_index=True)
-    len_before = len(dfg)
-    dfg.drop_duplicates(inplace=True)
-    print(f"{len_before - len(dfg)}行の重複データが削除されました")
+    df_daily_goal = pd.concat([df_ss_goal, df_ss_goal2], join="outer", ignore_index=True)
+    len_before = len(df_daily_goal)
+    df_daily_goal.drop_duplicates(inplace=True)
+    print(f"{len_before - len(df_daily_goal)}行の重複データが削除されました")
 
     # 店舗名をもとに店舗番号をマッピング
-    dfg["店舗番号"] = dfg["店舗名"].map(store_dict)
-    if dfg["店舗名"].count() == dfg["店舗番号"].count():
+    df_daily_goal["店舗番号"] = df_daily_goal["店舗名"].map(store_dict)
+    if df_daily_goal["店舗名"].count() == df_daily_goal["店舗番号"].count():
         print("マッピング成功")
     else:
         print("マッピングに漏れあり")
-        print(dfg[dfg["店舗番号"].isnull()]["店舗名"].unique())
+        print(df_daily_goal[df_daily_goal["店舗番号"].isnull()]["店舗名"].unique())
 
     # 不要カラムを削除
-    dfg.drop(columns=["祝日", "休日"], inplace=True)
+    df_daily_goal.drop(columns=["祝日", "休日"], inplace=True)
 
     # 日付・年月型に
-    dfg["目標日"] = pd.to_datetime(dfg["目標日"]).dt.date
-    dfg["目標月"] = pd.to_datetime(dfg["目標月"], format="%Y/%m")
+    df_daily_goal["目標日"] = pd.to_datetime(df_daily_goal["目標日"]).dt.date
+    df_daily_goal["目標月"] = pd.to_datetime(df_daily_goal["目標月"], format="%Y/%m")
 
     # 整数型・小数型に
-    dfg[["店舗番号", "総来店目標"]] = (
-        dfg[["店舗番号", "総来店目標"]].fillna(0).astype(int)
+    df_daily_goal[["店舗番号", "総来店目標"]] = (
+        df_daily_goal[["店舗番号", "総来店目標"]].fillna(0).astype(int)
     )
-    dfg[["DU来店目標", "Meetup参加目標", "SHIRURU目標", "MCS目標"]] = dfg[
+    df_daily_goal[["DU来店目標", "Meetup参加目標", "SHIRURU目標", "MCS目標"]] = df_daily_goal[
         ["DU来店目標", "Meetup参加目標", "SHIRURU目標", "MCS目標"]
     ].astype(float)
 
-    dfg.rename(columns=GOAL_COLUMN_MAPPING, inplace=True)
+    df_daily_goal.rename(columns=GOAL_COLUMN_MAPPING, inplace=True)
 
-    return dfg
+    return df_daily_goal
 
 
 def _build_monthly_goal(ss_goal):
