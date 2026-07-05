@@ -9,83 +9,38 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from etl import (
-    aggregate,
-    auth,
-    bigquery_writer,
-    config,
-    event,
-    goal,
-    mcs,
-    meetup,
-    order,
-    report,
-    shiruru,
-    user,
-)
+from etl import auth, bigquery_writer, config, pipeline, report
 
 
 def main():
     # ------------------------------------------------------------------
-    # 認証（サービスアカウント）
+    # 抽出・加工
     # ------------------------------------------------------------------
-    gc = auth.get_gspread_client()
-    forms_service = auth.get_forms_service()
-    bq_client = auth.get_bigquery_client()
-    drive_service = auth.get_drive_service()
+    bq_tables, extra = pipeline.build_all()
 
+    # ------------------------------------------------------------------
+    # BigQuery 書き込み
+    # ------------------------------------------------------------------
+    bq_client = auth.get_bigquery_client()
     writer = bigquery_writer.BigQueryWriter(bq_client)
     t = config.TABLE_NAMES
 
-    # ------------------------------------------------------------------
-    # 抽出・加工・BigQuery 書き込み（処理ごと）
-    # ------------------------------------------------------------------
-    print("=== 参加データ ===")
-    df_meetup, bq_meetup = meetup.build(gc, drive_service)
-    writer.write(bq_meetup, t["meetup"])
-
-    print("=== 来店データ ===")
-    df_order, bq_order = order.build(gc, drive_service)
-    writer.write(bq_order, t["order"])
-
-    print("=== イベントデータ ===")
-    bq_event = event.build(gc, drive_service)
+    for key in [
+        "meetup", "order", "report_new", "daily", "user",
+        "mcs", "shiruru", "goal", "goal_monthly",
+    ]:
+        writer.write(bq_tables[key], t[key])
     # イベントテーブルは元ノートブックでも書き込みを無効化しているため既定ではスキップ
-    # writer.write(bq_event, t["event"])
-
-    print("=== 日報データ ===")
-    bq_report_new, df_report_new, form_structure_new = report.build_new(forms_service)
-    writer.write(bq_report_new, t["report_new"])
-
-    print("=== 日次データ集計 ===")
-    df_daily = aggregate.build(df_order, bq_meetup)
-    writer.write(df_daily, t["daily"])
-
-    print("=== 個人データ ===")
-    bq_user = user.build(df_order, df_meetup)
-    writer.write(bq_user, t["user"])
-
-    print("=== MCS ===")
-    bq_mcs = mcs.build(gc)
-    writer.write(bq_mcs, t["mcs"])
-
-    print("=== SHIRURU ===")
-    bq_srr = shiruru.build(gc)
-    writer.write(bq_srr, t["shiruru"])
-
-    print("=== 目標値 ===")
-    bq_goal, bq_goal_monthly = goal.build(gc)
-    writer.write(bq_goal, t["goal"])
-    writer.write(bq_goal_monthly, t["goal_monthly"])
+    # writer.write(bq_tables["event"], t["event"])
 
     # 店舗別日報シートの書き出し（config で URL を設定した場合のみ）
     if config.STORE_REPORT_SPREADSHEET_URL:
         print("=== 店舗別日報シート書き出し ===")
         report.write_store_report_sheets(
-            gc,
-            df_report_new,
-            form_structure_new,
-            bq_report_new,
+            extra["gc"],
+            extra["df_report_new"],
+            extra["form_structure_new"],
+            bq_tables["report_new"],
             config.STORE_REPORT_SPREADSHEET_URL,
             config.STORE_REPORT_START_DATE,
         )
@@ -95,6 +50,10 @@ def main():
     # ------------------------------------------------------------------
     now = datetime.now(ZoneInfo("Asia/Tokyo"))
     print(f"最終更新日時: {now}")
+
+    bq_meetup = bq_tables["meetup"]
+    bq_order = bq_tables["order"]
+    bq_mcs = bq_tables["mcs"]
 
     last_online = bq_meetup[
         (bq_meetup["attendance"] == 1) & (bq_meetup["meetup_type"] == "オンライン")

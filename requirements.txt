@@ -7,3 +7,4 @@ google-auth
 google-cloud-bigquery
 pyarrow
 db-dtypes
+jupyter

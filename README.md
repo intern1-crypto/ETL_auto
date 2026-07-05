@@ -10,14 +10,20 @@ Google Colab で運用していた ETL ノートブック（`ETL運用.ipynb`）
 
 ```
 ETL_auto/
-├── main.py                 # エントリーポイント（全処理をオーケストレーション）
+├── main.py                    # エントリーポイント（BigQuery へ書き込み）
 ├── requirements.txt
-├── credentials/            # サービスアカウント鍵（JSON）を置く ※Git 管理対象外
+├── credentials/               # サービスアカウント鍵（JSON）を置く ※Git 管理対象外
+├── scripts/
+│   └── save_preview_data.py   # 変換後データを preview_data/ に保存する確認用スクリプト
+├── notebooks/
+│   └── check_head.ipynb       # preview_data/ の各テーブルの先頭行を確認する Notebook
+├── preview_data/               # 確認用に保存した変換後データ（Parquet） ※Git 管理対象外
 └── etl/
     ├── config.py           # パス・ID・URL などの設定を一元管理
     ├── auth.py             # サービスアカウント認証（Sheets / Drive / BigQuery / Forms）
     ├── store_mapping.py    # 店舗名 ⇔ 店舗番号の辞書
     ├── utils.py            # 共通ヘルパー（Drive CSV 読込・フォーム構造解析など）
+    ├── pipeline.py         # 全データソースの抽出・加工をまとめる（build_all）
     ├── meetup.py           # 参加データ        → bq_meetup
     ├── order.py            # 来店データ        → bq_order
     ├── event.py            # イベントデータ    → bq_event
@@ -77,6 +83,18 @@ URL、フォーム ID を必要に応じて調整する。
 ```bash
 python main.py
 ```
+
+## BigQuery ロード前データの確認
+
+BigQuery へ書き込む前に、変換後データの内容をローカルで確認したい場合は
+以下を実行する（BigQuery への書き込みは行わない）。
+
+```bash
+python scripts/save_preview_data.py
+```
+
+`preview_data/` に各テーブルが Parquet 形式で保存される。保存後、
+`notebooks/check_head.ipynb` を開いて先頭行を確認できる。
 
 ## 元ノートブックからの主な変更点
 

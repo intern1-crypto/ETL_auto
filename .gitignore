@@ -2,6 +2,12 @@
 credentials/*
 !credentials/.gitkeep
 
+# 確認用に保存した変換後データ
+preview_data/
+
+# Jupyter
+.ipynb_checkpoints/
+
 # Python
 __pycache__/
 *.py[cod]
