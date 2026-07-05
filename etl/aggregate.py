@@ -28,11 +28,11 @@ def _aggregate_meetup(df_meetup_bq):
     df_daily_meetup["date"] = df_daily_meetup["start_at"].dt.date
 
     # キャンセル有無を1,0に
-    df_daily_meetup["cancel"] = df_daily_meetup["cancel"].notnull().astype(int)
+    df_daily_meetup["cancell"] = df_daily_meetup["cancell"].notnull().astype(int)
 
     # date, store_code 毎に参加・参加予定・キャンセルのそれぞれの合計
     df_daily_meetup = df_daily_meetup.groupby(["date", "store_code"])[
-        ["attendance", "planned_attendance", "cancel"]
+        ["attendance", "planned_attendance", "cancell"]
     ].sum()
     return df_daily_meetup.reset_index()
 
@@ -53,7 +53,7 @@ def build(df_order, df_meetup_bq):
     df_daily = df_daily[
         [
             "date", "store_code", "store", "visit_total", "visit_du",
-            "attendance", "planned_attendance", "cancel",
+            "attendance", "planned_attendance", "cancell",
         ]
     ]
 
@@ -62,7 +62,7 @@ def build(df_order, df_meetup_bq):
 
     # 整数型に
     int_columns = [
-        "visit_total", "visit_du", "attendance", "planned_attendance", "cancel",
+        "visit_total", "visit_du", "attendance", "planned_attendance", "cancell",
     ]
     df_daily[int_columns] = df_daily[int_columns].astype(int)
 
