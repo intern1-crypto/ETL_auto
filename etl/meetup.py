@@ -17,7 +17,7 @@ COLUMN_MAPPING = {
     "イベント開始日時": "start_at",
     "イベント終了日時": "end_at",
     "MeetupID": "event_id",
-    "結合ID": "conected_id",
+    "結合ID": "connected_id",
     "会員ID": "member_id",
     "店舗番号": "store_code",
     "店舗名": "store",
@@ -127,7 +127,7 @@ def _process(df_meetup_raw):
         + df_meetup["結合ID"].astype(str)
     )
 
-    df_meetup["cancell"] = (df_meetup["キャンセル有無"] == "キャンセル").astype(int)
+    df_meetup["cancel"] = (df_meetup["キャンセル有無"] == "キャンセル").astype(int)
     df_meetup["no_show"] = (df_meetup["キャンセル有無"] == "無断欠席").astype(int)
 
     return df_meetup
@@ -139,7 +139,7 @@ def _to_bq(df_meetup):
         [
             "予約ID", "イベント開始日時", "イベント終了日時", "MeetupID", "結合ID",
             "会員ID", "店舗番号", "店舗名", "企業名", "開催形式", "参加", "参加予定",
-            "cancell", "no_show", "予約したきっかけ", "学年", "入学年月", "予約日",
+            "cancel", "no_show", "予約したきっかけ", "学年", "入学年月", "予約日",
             "卒業年月", "大学", "文理", "学部", "専攻", "性別", "出身地", "満足度",
             "参加経由", "注力可否", "部活ID",
         ]

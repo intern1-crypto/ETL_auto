@@ -14,7 +14,7 @@ def _aggregate_order(df_order):
     df_order = df_order.copy()
 
     user_columns_order = [
-        "conected_id", "ordered_at", "store_code", "group", "grade",
+        "connected_id", "ordered_at", "store_code", "group", "grade",
         "university", "faculty", "DU_id",
     ]
 
@@ -25,7 +25,7 @@ def _aggregate_order(df_order):
 
     df_user_order = (
         df_du[user_columns_order]
-        .groupby("conected_id")
+        .groupby("connected_id")
         .agg(
             visit=("DU_id", "nunique"),
             first_ordered_at=("ordered_at", "min"),
@@ -42,12 +42,12 @@ def _aggregate_order(df_order):
     this_year_april = pd.Timestamp(year=pd.Timestamp.today().year, month=4, day=1)
     df_visit_since_april = (
         df_order[df_order["ordered_at"] >= this_year_april]
-        .groupby("conected_id")
+        .groupby("connected_id")
         .agg(visit_since_april=("DU_id", "nunique"))
         .reset_index()
     )
     df_user_order = df_user_order.merge(
-        df_visit_since_april, on="conected_id", how="left"
+        df_visit_since_april, on="connected_id", how="left"
     )
     df_user_order["visit_since_april"] = (
         df_user_order["visit_since_april"].fillna(0).astype(int)
@@ -85,7 +85,7 @@ def _aggregate_meetup(df_meetup):
         )
         .reset_index()
     )
-    df_user_meetup.rename(columns={"結合ID": "conected_id"}, inplace=True)
+    df_user_meetup.rename(columns={"結合ID": "connected_id"}, inplace=True)
 
     # 今年度4月以降の参加数
     this_year_april = pd.Timestamp(year=pd.Timestamp.today().year, month=4, day=1)
@@ -95,10 +95,10 @@ def _aggregate_meetup(df_meetup):
         .agg(attendance_since_april=("参加", "sum"))
         .reset_index()
     )
-    df_meetup_since_april.rename(columns={"結合ID": "conected_id"}, inplace=True)
+    df_meetup_since_april.rename(columns={"結合ID": "connected_id"}, inplace=True)
 
     df_user_meetup = df_user_meetup.merge(
-        df_meetup_since_april, on="conected_id", how="left"
+        df_meetup_since_april, on="connected_id", how="left"
     )
     df_user_meetup["attendance_since_april"] = (
         df_user_meetup["attendance_since_april"].fillna(0).astype(int)
@@ -113,7 +113,7 @@ def build(df_order, df_meetup):
     df_user_meetup = _aggregate_meetup(df_meetup)
 
     # 結合IDをキーとして結合
-    df_user = pd.merge(df_user_order, df_user_meetup, on="conected_id", how="outer")
+    df_user = pd.merge(df_user_order, df_user_meetup, on="connected_id", how="outer")
 
     # Meetup データの欠損値を来店データから埋める
     df_user["university"] = df_user["university_y"].fillna(df_user["university_x"])

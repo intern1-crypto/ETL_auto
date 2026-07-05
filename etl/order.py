@@ -13,8 +13,8 @@ from .store_mapping import store_dict
 from .utils import read_csv_folder_from_drive
 
 NEW_COLUMNS = [
-    "conected_id", "order_id", "store", "group", "university", "grade",
-    "Graduation_year", "faculty", "type", "ordered_at", "drink", "store_code",
+    "connected_id", "order_id", "store", "group", "university", "grade",
+    "graduation_year", "faculty", "type", "ordered_at", "drink", "store_code",
     "DU_id",
 ]
 
@@ -90,13 +90,13 @@ def _process(df_order_raw):
     df_order.columns = NEW_COLUMNS
 
     # 来店回数のカラム追加
-    df_order["visit_count"] = df_order.groupby("conected_id").cumcount() + 1
+    df_order["visit_count"] = df_order.groupby("connected_id").cumcount() + 1
 
     # カラムの順番を入れ替え
     df_order = df_order[
         [
-            "order_id", "ordered_at", "store_code", "store", "conected_id",
-            "visit_count", "group", "grade", "Graduation_year", "university",
+            "order_id", "ordered_at", "store_code", "store", "connected_id",
+            "visit_count", "group", "grade", "graduation_year", "university",
             "faculty", "type", "DU_id", "drink",
         ]
     ]
