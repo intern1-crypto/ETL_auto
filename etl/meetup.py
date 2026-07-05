@@ -133,7 +133,18 @@ def _process(df_meetup_raw):
     return df_meetup
 
 
-def _to_bq(df_meetup):
+def _load_bukatsu_dict(gc):
+    """部活ID -> 部活名 の対応表（部活ID タブ）を取得する。"""
+    ss_meetup = gc.open_by_url(config.MEETUP_SPREADSHEET_URL)
+    df_bukatsu = get_as_dataframe(ss_meetup.worksheet("部活ID"), evaluate_formulas=True)
+    df_bukatsu = df_bukatsu.dropna(subset=["bukatsu_id"])
+
+    # 部活ID は数値で管理されているため、bukatsu_id（文字列）と同じキー形式に揃える
+    keys = df_bukatsu["bukatsu_id"].astype(int).astype(str)
+    return dict(zip(keys, df_bukatsu["bukatsu"]))
+
+
+def _to_bq(df_meetup, gc):
     """df_meetup から BigQuery 出力用データフレーム（bq_meetup）を作成する。"""
     bq_meetup = df_meetup[
         [
@@ -149,6 +160,10 @@ def _to_bq(df_meetup):
 
     # 部活ID：数値IDと部活名などの自由記述が混在するため文字列に統一
     bq_meetup["bukatsu_id"] = bq_meetup["bukatsu_id"].astype("string")
+
+    # 部活ID -> 部活名（対応表にないIDは NaN のまま）
+    bukatsu_dict = _load_bukatsu_dict(gc)
+    bq_meetup["bukatsu"] = bq_meetup["bukatsu_id"].map(bukatsu_dict)
 
     # Pickup count
     cond_1 = (
@@ -171,5 +186,5 @@ def build(gc, drive_service):
     """参加データを構築して (df_meetup, bq_meetup) を返す。"""
     df_meetup_raw = _extract(gc, drive_service)
     df_meetup = _process(df_meetup_raw)
-    bq_meetup = _to_bq(df_meetup)
+    bq_meetup = _to_bq(df_meetup, gc)
     return df_meetup, bq_meetup
