@@ -1,17 +1,14 @@
 """日報データ（Google フォーム）の抽出・加工。
 
-旧フォームと新フォームの 2 種類を扱う。
-
 戻り値:
-    build_old(...) -> (bq_report, df_report_old, form_structure)
-    build_new(...) -> bq_report_new
+    build_new(...) -> (bq_report_new, df_report_new, form_structure)
 """
 
 import pandas as pd
 from gspread_dataframe import set_with_dataframe
 
 from . import config
-from .store_mapping import inverse_store_dict, store_dict, store_dict_report
+from .store_mapping import inverse_store_dict, store_dict
 from .utils import add_section_to_items, fix_shift_in_at
 
 # 全店共通の出力カラム
@@ -146,55 +143,8 @@ def _common_datetime_and_ints(df_report):
     return df_report
 
 
-def build_old(service):
-    """旧フォームの日報を構築して (bq_report, df_report_old, form_structure) を返す。"""
-    responses = _fetch_responses(service, config.REPORT_FORM_ID_OLD)
-    df_report_raw = _responses_to_df(responses)
-
-    form_structure = _get_form_structure(service, config.REPORT_FORM_ID_OLD)
-    question_mapping_common = _common_question_mapping(form_structure)
-    df_report_raw.rename(columns=question_mapping_common, inplace=True)
-
-    df_report_old = df_report_raw.copy()
-
-    # 旧フォーム専用の表記ゆれマップで店舗番号をマッピング
-    df_report_old["store_code"] = df_report_old["店舗名（シフトインした店舗）"].map(
-        store_dict_report
-    )
-    if (
-        df_report_old["店舗名（シフトインした店舗）"].count()
-        == df_report_old["store_code"].count()
-    ):
-        print("マッピング成功")
-    else:
-        print("マッピングに漏れあり")
-        print(
-            df_report_old[df_report_old["store_code"].isnull()][
-                "店舗名（シフトインした店舗）"
-            ].unique()
-        )
-
-    # 検証用（999）を除外
-    df_report_old = df_report_old[df_report_old["store_code"] != 999]
-
-    # 正規の店舗名を店舗番号からマッピング
-    df_report_old["store"] = df_report_old["store_code"].map(inverse_store_dict)
-    df_report_old.drop(columns=["店舗名（シフトインした店舗）"], inplace=True)
-
-    # timestamp をもとに昇順に並べる
-    df_report_old.sort_values(by="timestamp", ascending=True, inplace=True)
-    df_report_old.reset_index(drop=True, inplace=True)
-
-    df_report_old.rename(columns=RENAME_MAPPING, inplace=True)
-    df_report_old = _common_datetime_and_ints(df_report_old)
-
-    bq_report = df_report_old[QUESTIONS_COMMON].copy()
-
-    return bq_report, df_report_old, form_structure
-
-
 def build_new(service):
-    """新フォームの日報を構築して bq_report_new を返す。"""
+    """新フォームの日報を構築して (bq_report_new, df_report_new, form_structure) を返す。"""
     responses = _fetch_responses(service, config.REPORT_FORM_ID_NEW)
     df_report_raw = _responses_to_df(responses)
 
@@ -234,7 +184,7 @@ def build_new(service):
 
     bq_report_new = df_report_new[QUESTIONS_COMMON].copy()
 
-    return bq_report_new
+    return bq_report_new, df_report_new, form_structure
 
 
 def write_store_report_sheets(

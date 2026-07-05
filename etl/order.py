@@ -10,7 +10,7 @@ from gspread_dataframe import get_as_dataframe
 
 from . import config
 from .store_mapping import store_dict
-from .utils import read_csv_folder
+from .utils import read_csv_folder_from_drive
 
 NEW_COLUMNS = [
     "conected_id", "order_id", "store", "group", "university", "grade",
@@ -19,11 +19,12 @@ NEW_COLUMNS = [
 ]
 
 
-def _extract(gc):
-    """CSV とスプレッドシートから来店データを抽出・結合する。"""
-    folder = config.DATA_DIR / config.ORDER_CSV_SUBDIR
+def _extract(gc, drive_service):
+    """Google Drive とスプレッドシートから来店データを抽出・結合する。"""
     # utf-8 を優先し、失敗したファイルは cp932 で読み込む
-    df_order_raw = read_csv_folder(folder, encodings=("utf-8", "cp932"))
+    df_order_raw = read_csv_folder_from_drive(
+        drive_service, config.ORDER_CSV_FOLDER_ID, encodings=("utf-8", "cp932")
+    )
 
     # スプレッドシートを開く
     ss_order = gc.open_by_url(config.ORDER_SPREADSHEET_URL)
@@ -108,9 +109,9 @@ def _process(df_order_raw):
     return df_order
 
 
-def build(gc):
+def build(gc, drive_service):
     """来店データを構築して (df_order, bq_order) を返す。"""
-    df_order_raw = _extract(gc)
+    df_order_raw = _extract(gc, drive_service)
     df_order = _process(df_order_raw)
 
     # BigQuery 出力用：インド店舗（store_code >= 500）を除外

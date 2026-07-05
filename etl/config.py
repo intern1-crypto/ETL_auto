@@ -12,9 +12,6 @@ from pathlib import Path
 # このリポジトリのルート（etl/ の一つ上）
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# CSV などの元データを置くディレクトリ（旧: /content/drive/MyDrive/過去データ）
-DATA_DIR = BASE_DIR / "data"
-
 # サービスアカウントの JSON（秘密鍵）などを置くディレクトリ
 CREDENTIALS_DIR = BASE_DIR / "credentials"
 
@@ -31,11 +28,12 @@ SERVICE_ACCOUNT_FILE = CREDENTIALS_DIR / "fair-solution-453613-e2-cd765e924ab6.j
 FORMS_SERVICE_ACCOUNT_FILE = SERVICE_ACCOUNT_FILE
 
 # ---------------------------------------------------------------------------
-# CSV データフォルダ（DATA_DIR からの相対サブフォルダ名）
+# Google Drive の CSV フォルダ ID
+# ※サービスアカウントのメールアドレスに対象フォルダの閲覧権限を共有しておくこと
 # ---------------------------------------------------------------------------
-MEETUP_CSV_SUBDIR = "人別_Meetup参加者_2510更新"
-ORDER_CSV_SUBDIR = "来店数"
-EVENT_CSV_SUBDIR = "枠別_Meetup開催企業_2510更新"
+MEETUP_CSV_FOLDER_ID = "1-Q5KPssbgikwFamYPKmwfAp0quYVPZCb"
+ORDER_CSV_FOLDER_ID = "1-i9ZHIoiSB8e6cWqhZnVMoSOLslE21q-"
+EVENT_CSV_FOLDER_ID = "1LM7rjfi5DMJNdL9VMKY79Y4wWumZYjzi"
 
 # ---------------------------------------------------------------------------
 # スプレッドシート URL
@@ -50,7 +48,6 @@ GOAL_SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1P0cnzgYwEe1wYYeT
 # ---------------------------------------------------------------------------
 # Google フォーム ID（日報）
 # ---------------------------------------------------------------------------
-REPORT_FORM_ID_OLD = "16jvJ4z6reUwimTsVZQsU6s0Rf3US2VpQpA7k7amNOr0"
 REPORT_FORM_ID_NEW = "1-g9wDUw5OJeUTbaMfoFk-XeP56HMQaIGSJ95XVZ6z98"
 
 # ---------------------------------------------------------------------------
@@ -72,7 +69,6 @@ TABLE_NAMES = {
     "order": "来店",
     "meetup": "Meetup参加",
     "event": "イベント",
-    "report": "日報",
     "report_new": "日報_new",
     "daily": "日次データ",
     "user": "ユーザー",

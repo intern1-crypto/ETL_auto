@@ -35,6 +35,14 @@ def get_gspread_client():
     return gspread.authorize(creds)
 
 
+def get_drive_service():
+    """Google Drive API のサービスオブジェクトを返す（CSV フォルダの読み取り用）。"""
+    creds = service_account.Credentials.from_service_account_file(
+        str(config.SERVICE_ACCOUNT_FILE), scopes=SHEETS_SCOPES
+    )
+    return build("drive", "v3", credentials=creds)
+
+
 def get_bigquery_client():
     """BigQuery のクライアントを返す。"""
     creds = service_account.Credentials.from_service_account_file(

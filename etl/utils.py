@@ -1,25 +1,45 @@
 """各モジュールで共有するヘルパー関数。"""
 
-import glob
+import io
 import json
 import re
 
 import pandas as pd
 
 
-def read_csv_folder(folder, encodings=("cp932",)):
-    """フォルダ内の全 CSV を読み込み、縦結合したデータフレームを返す。
+def read_csv_folder_from_drive(drive_service, folder_id, encodings=("cp932",)):
+    """Google Drive の指定フォルダ内の全 CSV を読み込み、縦結合したデータフレームを返す。
 
     encodings に複数指定した場合、ファイルごとに先頭から順に試し、
     最初に成功したエンコーディングで読み込む。
+    サービスアカウントに対象フォルダの閲覧権限を共有しておくこと。
     """
-    csv_files = glob.glob(f"{folder}/*.csv")
+    files = []
+    page_token = None
+    while True:
+        response = (
+            drive_service.files()
+            .list(
+                q=f"'{folder_id}' in parents and trashed = false",
+                fields="nextPageToken, files(id, name)",
+                pageToken=page_token,
+            )
+            .execute()
+        )
+        files.extend(response.get("files", []))
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            break
+
+    csv_files = [f for f in files if f["name"].lower().endswith(".csv")]
+
     df_list = []
     for file in csv_files:
+        content = drive_service.files().get_media(fileId=file["id"]).execute()
         last_error = None
         for enc in encodings:
             try:
-                df_list.append(pd.read_csv(file, encoding=enc))
+                df_list.append(pd.read_csv(io.BytesIO(content), encoding=enc))
                 last_error = None
                 break
             except UnicodeDecodeError as e:

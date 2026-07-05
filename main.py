@@ -32,6 +32,7 @@ def main():
     gc = auth.get_gspread_client()
     forms_service = auth.get_forms_service()
     bq_client = auth.get_bigquery_client()
+    drive_service = auth.get_drive_service()
 
     writer = bigquery_writer.BigQueryWriter(bq_client)
     t = config.TABLE_NAMES
@@ -40,24 +41,20 @@ def main():
     # 抽出・加工・BigQuery 書き込み（処理ごと）
     # ------------------------------------------------------------------
     print("=== 参加データ ===")
-    df_meetup, bq_meetup = meetup.build(gc)
+    df_meetup, bq_meetup = meetup.build(gc, drive_service)
     writer.write(bq_meetup, t["meetup"])
 
     print("=== 来店データ ===")
-    df_order, bq_order = order.build(gc)
+    df_order, bq_order = order.build(gc, drive_service)
     writer.write(bq_order, t["order"])
 
     print("=== イベントデータ ===")
-    bq_event = event.build(gc)
+    bq_event = event.build(gc, drive_service)
     # イベントテーブルは元ノートブックでも書き込みを無効化しているため既定ではスキップ
     # writer.write(bq_event, t["event"])
 
-    print("=== 日報データ（旧フォーム） ===")
-    bq_report, df_report_old, form_structure_old = report.build_old(forms_service)
-    writer.write(bq_report, t["report"])
-
-    print("=== 日報データ（新フォーム） ===")
-    bq_report_new = report.build_new(forms_service)
+    print("=== 日報データ ===")
+    bq_report_new, df_report_new, form_structure_new = report.build_new(forms_service)
     writer.write(bq_report_new, t["report_new"])
 
     print("=== 日次データ集計 ===")
@@ -86,9 +83,9 @@ def main():
         print("=== 店舗別日報シート書き出し ===")
         report.write_store_report_sheets(
             gc,
-            df_report_old,
-            form_structure_old,
-            bq_report,
+            df_report_new,
+            form_structure_new,
+            bq_report_new,
             config.STORE_REPORT_SPREADSHEET_URL,
             config.STORE_REPORT_START_DATE,
         )

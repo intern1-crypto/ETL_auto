@@ -43,12 +43,13 @@ COLUMN_MAPPING = {
 }
 
 
-def _extract(gc):
-    """CSV とスプレッドシートから参加データを抽出・結合する。"""
-    from .utils import read_csv_folder
+def _extract(gc, drive_service):
+    """Google Drive とスプレッドシートから参加データを抽出・結合する。"""
+    from .utils import read_csv_folder_from_drive
 
-    folder = config.DATA_DIR / config.MEETUP_CSV_SUBDIR
-    df_meetup_raw = read_csv_folder(folder, encodings=("cp932",))
+    df_meetup_raw = read_csv_folder_from_drive(
+        drive_service, config.MEETUP_CSV_FOLDER_ID, encodings=("cp932",)
+    )
     df_meetup_raw["イベント日"] = pd.to_datetime(df_meetup_raw["イベント日"])
 
     # スプレッドシートを開く
@@ -163,9 +164,9 @@ def _to_bq(df_meetup):
     return bq_meetup
 
 
-def build(gc):
+def build(gc, drive_service):
     """参加データを構築して (df_meetup, bq_meetup) を返す。"""
-    df_meetup_raw = _extract(gc)
+    df_meetup_raw = _extract(gc, drive_service)
     df_meetup = _process(df_meetup_raw)
     bq_meetup = _to_bq(df_meetup)
     return df_meetup, bq_meetup

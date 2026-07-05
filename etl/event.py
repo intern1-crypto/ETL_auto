@@ -8,7 +8,7 @@ import pandas as pd
 from gspread_dataframe import get_as_dataframe
 
 from . import config
-from .utils import read_csv_folder
+from .utils import read_csv_folder_from_drive
 
 COLUMN_MAPPING = {
     "イベントID": "event_id",
@@ -30,10 +30,11 @@ COLUMN_MAPPING = {
 }
 
 
-def _extract(gc):
-    """CSV とスプレッドシートからイベントデータを抽出・結合する。"""
-    folder = config.DATA_DIR / config.EVENT_CSV_SUBDIR
-    df_event_raw = read_csv_folder(folder, encodings=("cp932",))
+def _extract(gc, drive_service):
+    """Google Drive とスプレッドシートからイベントデータを抽出・結合する。"""
+    df_event_raw = read_csv_folder_from_drive(
+        drive_service, config.EVENT_CSV_FOLDER_ID, encodings=("cp932",)
+    )
 
     df_event_raw["予約日"] = pd.to_datetime(df_event_raw["予約日"], format="mixed").dt.date
     df_event_raw["作成日"] = pd.to_datetime(df_event_raw["作成日"], format="mixed")
@@ -65,13 +66,23 @@ def _process(df_event_raw):
     """イベントデータを加工して bq_event を作成する。"""
     bq_event = df_event_raw.copy()
 
-    # 開始日時と終了日時を作成
+    # 開始時間が欠損している行は開始日時を特定できないため除外
+    len_before = len(bq_event)
+    bq_event = bq_event[bq_event["開始時間"].notna()]
+    print(f"{len_before - len(bq_event)}行の開始時間欠損データが除外されました")
+
+    # 開始日時を作成
     bq_event["開始日時"] = pd.to_datetime(
         bq_event["予約日"].astype(str) + " " + bq_event["開始時間"]
     )
-    bq_event["終了日時"] = pd.to_datetime(
-        bq_event["予約日"].astype(str) + " " + bq_event["終了時間"]
+
+    # 終了日時を作成（終了時間が欠損している場合は開始日時の1時間後とする）
+    end_at_str = bq_event["予約日"].astype(str) + " " + bq_event["終了時間"].fillna("")
+    bq_event["終了日時"] = pd.to_datetime(end_at_str, errors="coerce")
+    bq_event["終了日時"] = bq_event["終了日時"].fillna(
+        bq_event["開始日時"] + pd.Timedelta(hours=1)
     )
+
     bq_event.drop(columns=["開始時間", "終了時間", "予約日"], inplace=True)
 
     # 整数型に
@@ -103,8 +114,8 @@ def _process(df_event_raw):
     return bq_event
 
 
-def build(gc):
+def build(gc, drive_service):
     """イベントデータを構築して bq_event を返す。"""
-    df_event_raw = _extract(gc)
+    df_event_raw = _extract(gc, drive_service)
     bq_event = _process(df_event_raw)
     return bq_event

@@ -2,10 +2,6 @@
 credentials/*
 !credentials/.gitkeep
 
-# 元データ
-data/*
-!data/.gitkeep
-
 # Python
 __pycache__/
 *.py[cod]

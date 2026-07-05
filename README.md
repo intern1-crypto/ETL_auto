@@ -13,16 +13,15 @@ ETL_auto/
 ├── main.py                 # エントリーポイント（全処理をオーケストレーション）
 ├── requirements.txt
 ├── credentials/            # サービスアカウント鍵（JSON）を置く ※Git 管理対象外
-├── data/                   # CSV 元データを置く ※Git 管理対象外
 └── etl/
     ├── config.py           # パス・ID・URL などの設定を一元管理
-    ├── auth.py             # サービスアカウント認証（Sheets / BigQuery / Forms）
+    ├── auth.py             # サービスアカウント認証（Sheets / Drive / BigQuery / Forms）
     ├── store_mapping.py    # 店舗名 ⇔ 店舗番号の辞書
-    ├── utils.py            # 共通ヘルパー（CSV 読込・フォーム構造解析など）
+    ├── utils.py            # 共通ヘルパー（Drive CSV 読込・フォーム構造解析など）
     ├── meetup.py           # 参加データ        → bq_meetup
     ├── order.py            # 来店データ        → bq_order
     ├── event.py            # イベントデータ    → bq_event
-    ├── report.py           # 日報（旧/新フォーム）→ bq_report / bq_report2
+    ├── report.py           # 日報          → bq_report_new
     ├── aggregate.py        # 日次データ集計    → df_daily
     ├── user.py             # 個人データ        → bq_user
     ├── mcs.py              # MCS              → bq_mcs
@@ -56,13 +55,17 @@ Colab の `google.colab.auth`（ユーザー OAuth）を廃止し、単一のサ
 - BigQuery のデータセットに対する書き込み権限（例: `BigQuery Data Editor`）
 - Google フォームは、フォームの所有者がサービスアカウントに共有しておく
 
-### 3. 元データの配置（`data/`）
+### 3. 元データ（CSV）の配置
 
-以下のサブフォルダに CSV を配置する（フォルダ名は `etl/config.py` で変更可能）。
+参加データ・来店データ・イベントデータの CSV は、いずれも Google Drive 上のフォルダ
+から直接読み込む（ローカルの `data/` フォルダは使用しない）。
 
-- `data/人別_Meetup参加者_2510更新/` … 参加データ CSV
-- `data/来店数/` … 来店データ CSV
-- `data/枠別_Meetup開催企業_2510更新/` … イベントデータ CSV
+`etl/config.py` で対象フォルダの ID を指定し、サービスアカウントのメールアドレスに
+それぞれのフォルダの閲覧権限を共有しておくこと。
+
+- `MEETUP_CSV_FOLDER_ID` … 参加データ（Meetup 参加者）CSV フォルダ
+- `ORDER_CSV_FOLDER_ID` … 来店データ CSV フォルダ
+- `EVENT_CSV_FOLDER_ID` … イベントデータ CSV フォルダ
 
 ### 4. 設定値の確認
 
@@ -77,7 +80,8 @@ python main.py
 
 ## 元ノートブックからの主な変更点
 
-- `google.colab.drive` によるマウントを廃止し、ローカルの `data/` を参照
+- `google.colab.drive` によるマウントを廃止し、Drive API（サービスアカウント）経由で
+  CSV フォルダを直接参照
 - `google.colab.auth` によるユーザー OAuth を廃止し、サービスアカウント認証に統一
 - `DataFrame.to_gbq` を BigQuery クライアントの `load_table_from_dataframe`
   （WRITE_TRUNCATE）に置き換え
