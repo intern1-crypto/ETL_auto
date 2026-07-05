@@ -77,7 +77,7 @@ def _build_daily_goal(ss_goal):
 
 def _build_monthly_goal(ss_goal):
     """月毎目標値（worksheet 0）を構築する。"""
-    df_goal = get_as_dataframe(ss_goal.get_worksheet(0))
+    df_goal = get_as_dataframe(ss_goal.get_worksheet(0), evaluate_formulas=True)
 
     df_goal = df_goal[
         [

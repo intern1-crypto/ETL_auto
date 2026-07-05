@@ -59,6 +59,11 @@ def build(gc):
     df_srr["配布判定"] = df_srr["配布判定"].fillna(0).astype(int)
     df_srr["店舗番号"] = df_srr["店舗番号"].fillna(0).astype(int)
 
+    # 配布単価："-"（コストなし）を0にして数値型に変換
+    df_srr["配布単価"] = (
+        pd.to_numeric(df_srr["配布単価"], errors="coerce").fillna(0).astype(int)
+    )
+
     df_srr.rename(columns=COLUMN_MAPPING, inplace=True)
 
     return df_srr

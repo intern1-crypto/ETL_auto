@@ -147,6 +147,9 @@ def _to_bq(df_meetup):
 
     bq_meetup.rename(columns=COLUMN_MAPPING, inplace=True)
 
+    # 部活ID：数値IDと部活名などの自由記述が混在するため文字列に統一
+    bq_meetup["bukatsu_id"] = bq_meetup["bukatsu_id"].astype("string")
+
     # Pickup count
     cond_1 = (
         (bq_meetup["attendance"] == 1) | (bq_meetup["planned_attendance"] == 1)
