@@ -133,15 +133,16 @@ def _process(df_meetup_raw):
     return df_meetup
 
 
-def _load_bukatsu_dict(gc):
-    """部活ID -> 部活名 の対応表（部活ID タブ）を取得する。"""
+def _load_bukatsu_master(gc):
+    """部活ID をキーとした部活マスタ（部活ID タブ）を取得する。"""
     ss_meetup = gc.open_by_url(config.MEETUP_SPREADSHEET_URL)
     df_bukatsu = get_as_dataframe(ss_meetup.worksheet("部活ID"), evaluate_formulas=True)
     df_bukatsu = df_bukatsu.dropna(subset=["bukatsu_id"])
 
     # 部活ID は数値で管理されているため、bukatsu_id（文字列）と同じキー形式に揃える
-    keys = df_bukatsu["bukatsu_id"].astype(int).astype(str)
-    return dict(zip(keys, df_bukatsu["bukatsu"]))
+    df_bukatsu["bukatsu_id"] = df_bukatsu["bukatsu_id"].astype(int).astype(str)
+    df_bukatsu = df_bukatsu.drop_duplicates(subset="bukatsu_id", keep="last")
+    return df_bukatsu.set_index("bukatsu_id")
 
 
 def _to_bq(df_meetup, gc):
@@ -161,9 +162,12 @@ def _to_bq(df_meetup, gc):
     # 部活ID：数値IDと部活名などの自由記述が混在するため文字列に統一
     bq_meetup["bukatsu_id"] = bq_meetup["bukatsu_id"].astype("string")
 
-    # 部活ID -> 部活名（対応表にないIDは NaN のまま）
-    bukatsu_dict = _load_bukatsu_dict(gc)
-    bq_meetup["bukatsu"] = bq_meetup["bukatsu_id"].map(bukatsu_dict)
+    # 部活ID -> 部活名・目標参加人数（対応表にないIDは NaN のまま）
+    bukatsu_master = _load_bukatsu_master(gc)
+    bq_meetup["bukatsu"] = bq_meetup["bukatsu_id"].map(bukatsu_master["bukatsu"])
+    bq_meetup["goal_attendance"] = bq_meetup["bukatsu_id"].map(
+        bukatsu_master["goal_attendance"]
+    )
 
     # Pickup count
     cond_1 = (
