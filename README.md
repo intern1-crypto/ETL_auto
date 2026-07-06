@@ -50,7 +50,7 @@ Colab の `google.colab.auth`（ユーザー OAuth）を廃止し、単一のサ
 （`daily-report`）に Sheets / Drive / BigQuery / Google フォームの権限を集約して
 認証する。以下の JSON を `credentials/` に配置する。
 
-- `daily-report-451612-0a0691c91c6b.json` … Sheets / Drive / BigQuery / フォーム 共通
+- `etl-secret-key.json` … Sheets / Drive / BigQuery / フォーム 共通
 
 ファイル名は `etl/config.py`（`SERVICE_ACCOUNT_FILE`）で変更可能。
 
