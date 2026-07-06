@@ -47,8 +47,11 @@ pip install -r requirements.txt
 ### 2. サービスアカウント鍵の配置（`credentials/`）
 
 Colab の `google.colab.auth`（ユーザー OAuth）を廃止し、単一のサービスアカウント
-（`daily-report`）に Sheets / Drive / BigQuery / Google フォームの権限を集約して
+（`connecter@fair-solution-453613-e2.iam.gserviceaccount.com`）に Sheets / Drive / BigQuery / Google フォームの権限を集約して
 認証する。以下の JSON を `credentials/` に配置する。
+
+サービスアカウントのDrive保管場所: 
+[GoogleDrive](https://drive.google.com/file/d/1GN9oeFGa-3pA_ivQtGCcVg7Mk0PKP9Pj/view?usp=drive_link)
 
 - `etl-secret-key.json` … Sheets / Drive / BigQuery / フォーム 共通
 
