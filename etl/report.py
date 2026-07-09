@@ -128,7 +128,7 @@ def _common_datetime_and_ints(df_report):
     original_len = len(df_report)
     df_report = df_report[
         ~df_report.duplicated(subset=["shift-in_at", "staff_number"], keep="last")
-    ]
+    ].copy()
 
     # タイムゾーン情報を落として naive datetime に
     df_report["timestamp"] = pd.to_datetime(
