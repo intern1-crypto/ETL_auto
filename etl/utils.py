@@ -2,6 +2,7 @@
 
 import io
 import json
+import logging
 import re
 
 import pandas as pd
@@ -87,7 +88,7 @@ def fix_shift_in_at(shift, timestamp):
         return pd.to_datetime(shift_fixed, format="%Y-%m-%d %H:%M:%S", errors="coerce")
 
     except Exception as e:
-        print(f"エラー: {e} (shift={shift}, timestamp={timestamp})")
+        logging.warning("fix_shift_in_at エラー: %s (shift=%s, timestamp=%s)", e, shift, timestamp)
         return None
 
 

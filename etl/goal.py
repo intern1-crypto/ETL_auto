@@ -4,11 +4,15 @@
     build(...) -> (bq_goal, bq_goal_monthly)
 """
 
+import logging
+
 import pandas as pd
 from gspread_dataframe import get_as_dataframe
 
 from . import config
 from .store_mapping import store_dict
+
+logger = logging.getLogger(__name__)
 
 GOAL_COLUMN_MAPPING = {
     "店舗名": "store",
@@ -43,17 +47,13 @@ def _build_daily_goal(ss_goal):
 
     # 外部結合・重複削除
     df_daily_goal = pd.concat([df_ss_goal, df_ss_goal2], join="outer", ignore_index=True)
-    len_before = len(df_daily_goal)
     df_daily_goal.drop_duplicates(inplace=True)
-    print(f"{len_before - len(df_daily_goal)}行の重複データが削除されました")
 
     # 店舗名をもとに店舗番号をマッピング
     df_daily_goal["店舗番号"] = df_daily_goal["店舗名"].map(store_dict)
-    if df_daily_goal["店舗名"].count() == df_daily_goal["店舗番号"].count():
-        print("マッピング成功")
-    else:
-        print("マッピングに漏れあり")
-        print(df_daily_goal[df_daily_goal["店舗番号"].isnull()]["店舗名"].unique())
+    if df_daily_goal["店舗名"].count() != df_daily_goal["店舗番号"].count():
+        unmapped = df_daily_goal[df_daily_goal["店舗番号"].isnull()]["店舗名"].unique()
+        logger.warning("goal: 店舗マッピングに漏れあり: %s", unmapped)
 
     # 不要カラムを削除
     df_daily_goal.drop(columns=["祝日", "休日"], inplace=True)
@@ -98,7 +98,6 @@ def _build_monthly_goal(ss_goal):
 def build(gc):
     """目標値データを構築して (bq_goal, bq_goal_monthly) を返す。"""
     ss_goal = gc.open_by_url(config.GOAL_SPREADSHEET_URL)
-    print(f"{ss_goal.title}を開きました")
 
     bq_goal = _build_daily_goal(ss_goal)
     bq_goal_monthly = _build_monthly_goal(ss_goal)

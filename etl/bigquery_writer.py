@@ -27,4 +27,3 @@ class BigQueryWriter:
             df, table_id, job_config=job_config
         )
         job.result()  # 完了まで待機
-        print(f"{table_name} を書き込みました（{len(df)}行）")

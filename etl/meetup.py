@@ -5,12 +5,16 @@
     bq_meetup : BigQuery 出力用（英語カラム名）
 """
 
+import logging
+
 import numpy as np
 import pandas as pd
 from gspread_dataframe import get_as_dataframe
 
 from . import config
 from .store_mapping import store_dict
+
+logger = logging.getLogger(__name__)
 
 COLUMN_MAPPING = {
     "予約ID": "reservation_id",
@@ -54,17 +58,14 @@ def _extract(gc, drive_service):
 
     # スプレッドシートを開く
     ss_meetup = gc.open_by_url(config.MEETUP_SPREADSHEET_URL)
-    print(f"{ss_meetup.title}を開きました")
 
     df_ss_meetup = get_as_dataframe(ss_meetup.get_worksheet(0))
     df_ss_meetup_del = get_as_dataframe(ss_meetup.worksheet("カウント対象外Meetup"))
 
     # カウント対象外の予約IDを削除
-    len_before = len(df_ss_meetup)
     df_ss_meetup = df_ss_meetup[
         ~df_ss_meetup["予約ID"].isin(df_ss_meetup_del["MeetupID"])
     ]
-    print(f"{len_before - len(df_ss_meetup)}行の重複データが削除されました")
 
     # 日時を変換（yyyy-MM-dd HH:mm:ss 形式）
     df_ss_meetup["イベント日"] = pd.to_datetime(
@@ -73,9 +74,7 @@ def _extract(gc, drive_service):
 
     # CSV データとスプレッドシートデータを外部結合し、重複削除
     df_meetup_raw = pd.concat([df_meetup_raw, df_ss_meetup], join="outer", ignore_index=True)
-    len_before = len(df_meetup_raw)
     df_meetup_raw.drop_duplicates(inplace=True)
-    print(f"{len_before - len(df_meetup_raw)}行の重複データが削除されました")
 
     return df_meetup_raw
 
@@ -95,11 +94,9 @@ def _process(df_meetup_raw):
 
     # 店舗名をもとに店舗番号をマッピング
     df_meetup["店舗番号"] = df_meetup["店舗名"].map(store_dict)
-    if df_meetup["店舗名"].count() == df_meetup["店舗番号"].count():
-        print("マッピング成功")
-    else:
-        print("マッピングに漏れあり")
-        print(df_meetup[df_meetup["店舗番号"].isnull()]["店舗名"].unique())
+    if df_meetup["店舗名"].count() != df_meetup["店舗番号"].count():
+        unmapped = df_meetup[df_meetup["店舗番号"].isnull()]["店舗名"].unique()
+        logger.warning("meetup: 店舗マッピングに漏れあり: %s", unmapped)
 
     df_meetup = df_meetup.rename(columns={"予約ID": "MeetupID"})
     df_meetup["MeetupID"] = df_meetup["MeetupID"].astype(int)

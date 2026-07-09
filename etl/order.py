@@ -5,12 +5,16 @@
     bq_order : BigQuery 出力用（インド店舗を除外）
 """
 
+import logging
+
 import pandas as pd
 from gspread_dataframe import get_as_dataframe
 
 from . import config
 from .store_mapping import store_dict
 from .utils import read_csv_folder_from_drive
+
+logger = logging.getLogger(__name__)
 
 NEW_COLUMNS = [
     "connected_id", "order_id", "store", "group", "university", "grade",
@@ -28,8 +32,6 @@ def _extract(gc, drive_service):
 
     # スプレッドシートを開く
     ss_order = gc.open_by_url(config.ORDER_SPREADSHEET_URL)
-    print(f"{ss_order.title}を開きました")
-
     df_ss_order = get_as_dataframe(ss_order.get_worksheet(0))
 
     # yyyy-MM-dd HH:mm:ss 形式に変換
@@ -41,9 +43,7 @@ def _extract(gc, drive_service):
     df_order_raw = pd.concat([df_order_raw, df_ss_order], join="outer", ignore_index=True)
 
     # 重複データ削除
-    len_before = len(df_order_raw)
     df_order_raw.drop_duplicates(subset=["結合ID", "オーダーID", "登録日"], inplace=True)
-    print(f"{len_before - len(df_order_raw)}行の重複データが削除されました")
 
     return df_order_raw
 
@@ -58,9 +58,7 @@ def _process(df_order_raw):
     ].copy()
 
     # 重複データ削除
-    len_before = len(df_order)
     df_order.drop_duplicates(inplace=True)
-    print(f"{len_before - len(df_order)}行の重複データが削除されました")
 
     # カラム名変更・型変換
     df_order = df_order.rename(columns={"登録日": "オーダー日時"})
@@ -70,11 +68,9 @@ def _process(df_order_raw):
 
     # 店舗名をもとに店舗番号をマッピング
     df_order["店舗番号"] = df_order["店舗名"].map(store_dict)
-    if df_order["店舗名"].count() == df_order["店舗番号"].count():
-        print("マッピング成功")
-    else:
-        print("マッピングに漏れあり")
-        print(df_order[df_order["店舗番号"].isnull()]["店舗名"].unique())
+    if df_order["店舗名"].count() != df_order["店舗番号"].count():
+        unmapped = df_order[df_order["店舗番号"].isnull()]["店舗名"].unique()
+        logger.warning("order: 店舗マッピングに漏れあり: %s", unmapped)
 
     df_order["オーダーID"] = pd.to_numeric(df_order["オーダーID"]).astype(int)
 

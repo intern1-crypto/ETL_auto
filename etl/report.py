@@ -4,12 +4,16 @@
     build_new(...) -> (bq_report_new, df_report_new, form_structure)
 """
 
+import logging
+
 import pandas as pd
 from gspread_dataframe import set_with_dataframe
 
 from . import config
 from .store_mapping import inverse_store_dict, store_dict
 from .utils import add_section_to_items, fix_shift_in_at
+
+logger = logging.getLogger(__name__)
 
 # 全店共通の出力カラム
 QUESTIONS_COMMON = [
@@ -125,7 +129,6 @@ def _common_datetime_and_ints(df_report):
     df_report = df_report[
         ~df_report.duplicated(subset=["shift-in_at", "staff_number"], keep="last")
     ]
-    print(f"削除された重複行数: {original_len - len(df_report)} 行")
 
     # タイムゾーン情報を落として naive datetime に
     df_report["timestamp"] = pd.to_datetime(
@@ -135,12 +138,8 @@ def _common_datetime_and_ints(df_report):
         df_report["shift-in_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
     )
 
-    print(df_report[df_report["shift-in_at"] > df_report["timestamp"]][['store_code', 'staff_name', 'timestamp', 'shift-in_at', 'invitation']])
-
     # シフトイン日時がフォーム送信日時より後（入力ミス）の行を除外
-    original_len = len(df_report)
     df_report = df_report[df_report["shift-in_at"] <= df_report["timestamp"]]
-    print(f"シフトイン日時が送信日時より後だった行数: {original_len - len(df_report)} 行")
 
     # スタッフ名から半角・全角スペースを除く
     df_report["staff_name"] = df_report["staff_name"].str.replace(
@@ -167,16 +166,12 @@ def build_new(service):
     )
     if (
         df_report_new["店舗名（シフトインした店舗）"].count()
-        == df_report_new["store_code"].count()
+        != df_report_new["store_code"].count()
     ):
-        print("マッピング成功")
-    else:
-        print("マッピングに漏れあり")
-        print(
-            df_report_new[df_report_new["store_code"].isnull()][
-                "店舗名（シフトインした店舗）"
-            ].unique()
-        )
+        unmapped = df_report_new[df_report_new["store_code"].isnull()][
+            "店舗名（シフトインした店舗）"
+        ].unique()
+        logger.warning("report: 店舗マッピングに漏れあり: %s", unmapped)
 
     # timestamp をもとに昇順に並べる
     df_report_new.sort_values(by="timestamp", ascending=True, inplace=True)
@@ -240,4 +235,3 @@ def write_store_report_sheets(
                 title=str(store_code), rows="5000", cols="30"
             )
         set_with_dataframe(worksheet, df_store)
-        print(f"{store_code}データ書き込み完了！")

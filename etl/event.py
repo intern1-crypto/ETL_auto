@@ -4,11 +4,15 @@
     bq_event : BigQuery 出力用データフレーム
 """
 
+import logging
+
 import pandas as pd
 from gspread_dataframe import get_as_dataframe
 
 from . import config
 from .utils import read_csv_folder_from_drive
+
+logger = logging.getLogger(__name__)
 
 COLUMN_MAPPING = {
     "イベントID": "event_id",
@@ -42,8 +46,6 @@ def _extract(gc, drive_service):
 
     # スプレッドシートを開く
     ss_event = gc.open_by_url(config.EVENT_SPREADSHEET_URL)
-    print(f"{ss_event.title}を開きました")
-
     df_ss_event = get_as_dataframe(ss_event.get_worksheet(0))
 
     df_ss_event["予約日"] = pd.to_datetime(df_ss_event["予約日"], format="mixed").dt.date
@@ -51,9 +53,7 @@ def _extract(gc, drive_service):
     df_ss_event["キャンセル日"] = pd.to_datetime(df_ss_event["キャンセル日"], format="mixed")
 
     # 予約IDが欠損しているレコードを削除
-    len_before = len(df_ss_event)
     df_ss_event = df_ss_event.dropna(subset=["予約ID"])
-    print(f"{len_before - len(df_ss_event)}行のデータが削除されました")
 
     # CSV データとスプレッドシートデータの結合・重複削除
     df_event_raw = pd.concat([df_event_raw, df_ss_event], join="outer", ignore_index=True)
@@ -67,9 +67,7 @@ def _process(df_event_raw):
     bq_event = df_event_raw.copy()
 
     # 開始時間が欠損している行は開始日時を特定できないため除外
-    len_before = len(bq_event)
     bq_event = bq_event[bq_event["開始時間"].notna()]
-    print(f"{len_before - len(bq_event)}行の開始時間欠損データが除外されました")
 
     # 開始日時を作成
     bq_event["開始日時"] = pd.to_datetime(
