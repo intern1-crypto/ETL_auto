@@ -22,7 +22,7 @@ CREDENTIALS_DIR = BASE_DIR / "credentials"
 # （daily-report）に集約する運用。
 # ※ credentials ディレクトリに鍵を配置し、このサービスアカウントのメールアドレスへ
 #   対象スプレッドシート・BigQuery データセット・Google フォームの権限を付与しておくこと。
-SERVICE_ACCOUNT_FILE = CREDENTIALS_DIR / "etl-secret-key.json"
+SERVICE_ACCOUNT_FILE = CREDENTIALS_DIR / "gcp-secret-key.json"
 
 # Google フォーム（日報）読み取り用の鍵。上と同じサービスアカウントを使用する。
 FORMS_SERVICE_ACCOUNT_FILE = SERVICE_ACCOUNT_FILE
