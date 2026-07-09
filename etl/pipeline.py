@@ -17,31 +17,31 @@ def build_all():
     forms_service = auth.get_forms_service()
     drive_service = auth.get_drive_service()
 
-    print("=== 参加データ ===")
+    print("\n=== 参加データ ===")
     df_meetup, bq_meetup = meetup.build(gc, drive_service)
 
-    print("=== 来店データ ===")
+    print("\n=== 来店データ ===")
     df_order, bq_order = order.build(gc, drive_service)
 
-    print("=== イベントデータ ===")
+    print("\n=== イベントデータ ===")
     bq_event = event.build(gc, drive_service)
 
-    print("=== 日報データ ===")
+    print("\n=== 日報データ ===")
     bq_report_new, df_report_new, form_structure_new = report.build_new(forms_service)
 
-    print("=== 日次データ集計 ===")
+    print("\n=== 日次データ集計 ===")
     df_daily = aggregate.build(df_order, bq_meetup)
 
-    print("=== 個人データ ===")
+    print("\n=== 個人データ ===")
     bq_user = user.build(df_order, df_meetup)
 
-    print("=== MCS ===")
+    print("\n=== MCS ===")
     bq_mcs = mcs.build(gc)
 
-    print("=== SHIRURU ===")
+    print("\n=== SHIRURU ===")
     bq_srr = shiruru.build(gc)
 
-    print("=== 目標値 ===")
+    print("\n=== 目標値 ===")
     bq_goal, bq_goal_monthly = goal.build(gc)
 
     bq_tables = {

@@ -135,6 +135,13 @@ def _common_datetime_and_ints(df_report):
         df_report["shift-in_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
     )
 
+    print(df_report[df_report["shift-in_at"] > df_report["timestamp"]][['store_code', 'staff_name', 'timestamp', 'shift-in_at', 'invitation']])
+
+    # シフトイン日時がフォーム送信日時より後（入力ミス）の行を除外
+    original_len = len(df_report)
+    df_report = df_report[df_report["shift-in_at"] <= df_report["timestamp"]]
+    print(f"シフトイン日時が送信日時より後だった行数: {original_len - len(df_report)} 行")
+
     # スタッフ名から半角・全角スペースを除く
     df_report["staff_name"] = df_report["staff_name"].str.replace(
         r"[ 　]+", "", regex=True
