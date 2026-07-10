@@ -87,7 +87,7 @@ def _process(df_meetup_raw):
     df_meetup["開始時刻"] = df_meetup["イベント時間"].str.extract(r"(\d{2}:\d{2}:\d{2})")
     df_meetup["イベント開始日時"] = pd.to_datetime(
         df_meetup["イベント日"].astype(str) + " " + df_meetup["開始時刻"],
-        format="%Y-%m-%d %H:%M:%S",
+        format="mixed",
     )
     df_meetup["イベント終了日時"] = df_meetup["イベント開始日時"] + pd.Timedelta(hours=1)
     df_meetup.drop(columns=["開始時刻", "イベント時間"], inplace=True)
