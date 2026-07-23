@@ -71,6 +71,7 @@ TABLE_NAMES = {
     "event": "イベント",
     "report_new": "日報_new",
     "daily": "日次データ",
+    "monthly": "月次データ",
     "user": "ユーザー",
     "goal": "目標値",
     "goal_monthly": "月毎目標値",

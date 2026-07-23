@@ -35,7 +35,7 @@ def main():
 
     for key in [
         "meetup", "order", "report_new", "daily", "user",
-        "mcs", "shiruru", "goal", "goal_monthly",
+        "mcs", "shiruru", "goal", "goal_monthly", "monthly",
     ]:
         df = bq_tables[key]
         if df is None:

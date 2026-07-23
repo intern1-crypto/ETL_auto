@@ -67,16 +67,12 @@ def build_all():
         logger.warning("日次データ集計 (daily): 依存データ（order/meetup）の取得失敗のためスキップ")
         df_daily = None
 
-    if df_order is not None and df_meetup is not None:
-        try:
-            bq_user = user.build(df_order, df_meetup)
-        except Exception as e:
-            logger.error("個人データ (user) の処理に失敗", exc_info=True)
-            errors["user"] = e
-            bq_user = None
-    else:
-        logger.warning("個人データ (user): 依存データ（order/meetup）の取得失敗のためスキップ")
-        bq_user = None
+    try:
+        bq_goal, bq_goal_monthly = goal.build(gc)
+    except Exception as e:
+        logger.error("目標値 (goal) の抽出に失敗", exc_info=True)
+        errors["goal"] = e
+        bq_goal, bq_goal_monthly = None, None
 
     try:
         bq_mcs = mcs.build(gc)
@@ -92,12 +88,30 @@ def build_all():
         errors["shiruru"] = e
         bq_srr = None
 
-    try:
-        bq_goal, bq_goal_monthly = goal.build(gc)
-    except Exception as e:
-        logger.error("目標値 (goal) の抽出に失敗", exc_info=True)
-        errors["goal"] = e
-        bq_goal, bq_goal_monthly = None, None
+    # monthly は meetup と order に依存（目標値・MCS・SHIRURUは取得できていれば結合、失敗していれば省略）
+    if df_order is not None and bq_meetup is not None:
+        try:
+            df_monthly = aggregate.build_monthly(
+                df_order, bq_meetup, bq_goal_monthly, bq_mcs, bq_srr
+            )
+        except Exception as e:
+            logger.error("月次データ集計 (monthly) の処理に失敗", exc_info=True)
+            errors["monthly"] = e
+            df_monthly = None
+    else:
+        logger.warning("月次データ集計 (monthly): 依存データ（order/meetup）の取得失敗のためスキップ")
+        df_monthly = None
+
+    if df_order is not None and df_meetup is not None:
+        try:
+            bq_user = user.build(df_order, df_meetup)
+        except Exception as e:
+            logger.error("個人データ (user) の処理に失敗", exc_info=True)
+            errors["user"] = e
+            bq_user = None
+    else:
+        logger.warning("個人データ (user): 依存データ（order/meetup）の取得失敗のためスキップ")
+        bq_user = None
 
     bq_tables = {
         "meetup": bq_meetup,
@@ -105,6 +119,7 @@ def build_all():
         "event": bq_event,
         "report_new": bq_report_new,
         "daily": df_daily,
+        "monthly": df_monthly,
         "user": bq_user,
         "mcs": bq_mcs,
         "shiruru": bq_srr,

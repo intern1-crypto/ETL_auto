@@ -7,7 +7,6 @@
 
 import logging
 
-import numpy as np
 import pandas as pd
 from gspread_dataframe import get_as_dataframe
 
@@ -42,7 +41,7 @@ COLUMN_MAPPING = {
     "出身地": "hometown",
     "満足度": "satisfaction",
     "参加経由": "reservation_way",
-    "注力可否": "Pickup1",
+    "注力可否": "pickup_flag",
     "部活ID": "bukatsu_id",
 }
 
@@ -167,19 +166,8 @@ def _to_bq(df_meetup, gc):
         bukatsu_master["goal_attendance"]
     )
 
-    # Pickup count
-    cond_1 = (
-        (bq_meetup["attendance"] == 1) | (bq_meetup["planned_attendance"] == 1)
-    ) & (bq_meetup["Pickup1"] == "注力している")
-    cond_2 = ((bq_meetup["attendance"] == 1) | (bq_meetup["planned_attendance"] == 1)) & (
-        (bq_meetup["Pickup1"].isna()) | (bq_meetup["Pickup1"] == "注力していない")
-    )
-    cond_3 = (bq_meetup["attendance"] == 0) & (bq_meetup["planned_attendance"] == 0)
-
-    bq_meetup["Pickup"] = np.select([cond_1, cond_2, cond_3], [2, 1, 0], default=np.nan)
-    bq_meetup["Pickup"] = bq_meetup["Pickup"].fillna(0).astype(int)
-
-    bq_meetup = bq_meetup.drop(columns=["Pickup1"])
+    # 注力可否：「注力している」なら1, else 0
+    bq_meetup["pickup_flag"] = (bq_meetup["pickup_flag"] == "注力している").astype(int)
 
     return bq_meetup
 
