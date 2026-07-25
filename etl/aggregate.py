@@ -157,6 +157,10 @@ def build_monthly(
         (df_monthly["store_code"] > 0) & (df_monthly["store_code"] < 500)
     ]
 
+    # みなと銀行店舗を消す
+    df_monthly = df_monthly[~df_monthly['store_code'].isin([117, 120])]
+
+
     # 整数型に
     int_columns = [
         "DU", "attendance_count", "planned_attendance_count",
