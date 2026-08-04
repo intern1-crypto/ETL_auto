@@ -101,6 +101,11 @@ def _fetch_status(client, start_date, threshold):
 
 
 def main():
+    updated = input("データを更新しましたか(y/n)：").strip().lower()
+    if updated != "y":
+        print("main.py を実行してください")
+        return
+
     print("=== 表彰の指標確定確認 ===")
     start_yyyymm = _input_yyyymm("表彰開始年月を yyyymm 形式で入力してください（例: 202605）: ")
     end_yyyymm = _input_yyyymm("表彰終了年月を yyyymm 形式で入力してください（例: 202607）: ")
