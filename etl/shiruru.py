@@ -15,7 +15,7 @@ from .store_mapping import store_dict
 logger = logging.getLogger(__name__)
 
 COLUMN_MAPPING = {
-    "会員ID": "guest_num",
+    "会員ID": "member_id",
     "企業名": "company",
     "店舗番号": "store_code",
     "店舗名": "store",
@@ -42,7 +42,7 @@ def build(gc):
     df_srr["店舗番号"] = df_srr["店舗名"].map(store_dict)
     if df_srr["店舗名"].count() != df_srr["店舗番号"].count():
         unmapped = df_srr[df_srr["店舗番号"].isnull()]["店舗名"].unique()
-        logger.warning("shiruru: 店舗マッピングに漏れあり: %s", unmapped)
+        logger.warning("SHIRURU: 店舗マッピングに漏れあり: %s", unmapped)
 
     # 必要なカラムのみ残す
     df_srr = df_srr[list(COLUMN_MAPPING.keys())]
