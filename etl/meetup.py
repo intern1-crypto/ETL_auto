@@ -102,14 +102,29 @@ def _process(df_meetup_raw):
     df_meetup["MeetupID"] = df_meetup["MeetupID"].astype(int)
     df_meetup["会員ID"] = df_meetup["会員ID"].astype(int)
 
-    # 参加：参加なら1, else 0
-    df_meetup["参加可否"] = (df_meetup["参加可否"] == "参加").astype(int)
-    df_meetup = df_meetup.rename(columns={"参加可否": "参加"})
+    # 参加可否・キャンセル有無から 参加/参加予定/cancell/no_show を決定
+    #   参加可否が「参加」          → 参加=1
+    #   参加可否が「キャンセル」     → cancell=1
+    #   参加可否が「無断欠席」      → no_show=1
+    #   参加可否が「参加予定」かつ キャンセル有無が「キャンセル」 → cancell=1
+    #   参加可否が「参加予定」かつ キャンセル有無が「無断欠席」   → no_show=1
+    #   参加可否が「参加予定」かつ キャンセル有無がそれ以外（欠損等） → 参加予定=1
+    is_planned = df_meetup["参加可否"] == "参加予定"
 
-    # 参加予定：参加してないかつキャンセル有無が欠損 → 1, else → 0
-    df_meetup["参加予定"] = (
-        (df_meetup["参加"] == 0) & (df_meetup["キャンセル有無"].isnull())
+    df_meetup["参加"] = (df_meetup["参加可否"] == "参加").astype(int)
+    df_meetup["cancell"] = (
+        (df_meetup["参加可否"] == "キャンセル")
+        | (is_planned & (df_meetup["キャンセル有無"] == "キャンセル"))
     ).astype(int)
+    df_meetup["no_show"] = (
+        (df_meetup["参加可否"] == "無断欠席")
+        | (is_planned & (df_meetup["キャンセル有無"] == "無断欠席"))
+    ).astype(int)
+    df_meetup["参加予定"] = (
+        is_planned & ~df_meetup["キャンセル有無"].isin(["キャンセル", "無断欠席"])
+    ).astype(int)
+
+    df_meetup.drop(columns=["参加可否"], inplace=True)
 
     # 開催形式を簡潔に言い換え
     df_meetup["開催形式"] = df_meetup["開催形式"].replace(
@@ -123,9 +138,6 @@ def _process(df_meetup_raw):
         + "_"
         + df_meetup["結合ID"].astype(str)
     )
-
-    df_meetup["cancell"] = (df_meetup["キャンセル有無"] == "キャンセル").astype(int)
-    df_meetup["no_show"] = (df_meetup["キャンセル有無"] == "無断欠席").astype(int)
 
     return df_meetup
 
