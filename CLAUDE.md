@@ -1,0 +1,29 @@
+# CLAUDE.md
+
+このファイルは、このリポジトリで Claude Code が作業する際のルールを定義する。
+
+## セキュリティ・機密情報の取り扱い
+
+- `credentials/` ディレクトリ配下のファイル（サービスアカウント鍵などの JSON）は、
+  内容を閲覧・出力・引用しないこと。存在確認やファイル名の参照は問題ないが、
+  中身を `cat` / `Read` などで開かない。
+- `.env` など環境変数ファイルも同様に内容を閲覧しないこと。
+- 鍵・トークン・パスワードなどの機密情報をログ・コミットメッセージ・PR 説明文に
+  含めない。
+- `credentials/`・`.env`・`preview_data/` は Git 管理外（`.gitignore` 参照）。
+  誤って `git add` しないよう、コミット前に `git status` で確認する。
+
+## プロジェクト概要
+
+Google Colab で運用していた ETL ノートブックを、サービスアカウント（API）ベースで
+動く Python プロジェクトへ移植したもの。各データソース（参加 / 来店 / イベント /
+日報 / MCS / SHIRURU / 目標値など）を抽出・加工し、BigQuery のテーブルへ書き込む。
+
+詳細な構成・セットアップ手順は README.md を参照。
+
+## 実行コマンド
+
+```bash
+python main.py                      # BigQuery へ書き込み
+python scripts/save_preview_data.py # 変換後データを preview_data/ に保存（書き込みなし）
+```
