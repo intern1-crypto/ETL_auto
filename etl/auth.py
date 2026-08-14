@@ -28,11 +28,16 @@ FORMS_SCOPES = [
 
 
 def get_gspread_client():
-    """gspread のクライアントを返す。"""
+    """gspread のクライアントを返す。
+
+    店舗別日報シート書き出し（write_store_report_sheets）が店舗数分の
+    書き込みリクエストを連続発行するため、Sheets API のレート制限（429）に
+    達しやすい。BackOffHTTPClient で指数バックオフ再試行を行う。
+    """
     creds = service_account.Credentials.from_service_account_file(
         str(config.SERVICE_ACCOUNT_FILE), scopes=SHEETS_SCOPES
     )
-    return gspread.authorize(creds)
+    return gspread.authorize(creds, http_client=gspread.BackOffHTTPClient)
 
 
 def get_drive_service():

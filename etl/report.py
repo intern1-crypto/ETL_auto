@@ -7,7 +7,7 @@
 import logging
 
 import pandas as pd
-from gspread_dataframe import set_with_dataframe
+from gspread_dataframe import _cellrepr
 
 from . import config
 from .store_mapping import inverse_store_dict, store_dict
@@ -189,13 +189,26 @@ def build_new(service):
     return bq_report_new, df_report_new, form_structure
 
 
+def _values_for_sheet(df):
+    """DataFrame をシート書き込み用の2次元配列（ヘッダー行込み）に変換する。"""
+    header = [_cellrepr(col, True, "default") for col in df.columns]
+    rows = [
+        [_cellrepr(v, True, "default") for v in row]
+        for row in df.itertuples(index=False, name=None)
+    ]
+    return [header] + rows
+
+
 def write_store_report_sheets(
     gc, df_report, form_structure, bq_report, spreadsheet_url, start_date
 ):
-    """店舗ごとの日報を対象スプレッドシートの店舗番号シートへ書き出す（任意機能）。"""
-    import gspread
+    """店舗ごとの日報を対象スプレッドシートの店舗番号シートへ書き出す（任意機能）。
 
-    spreadsheet = gc.open_by_url(spreadsheet_url)
+    店舗数分（約20〜30店舗）のシートを1件ずつ clear() / update() すると
+    Sheets API の書き込みリクエスト数クォータ（Write requests per minute
+    per user）にすぐ達してしまうため、シートの作成・リサイズ・クリア・値の
+    書き込みをそれぞれ全店舗分まとめて1回のバッチリクエストで行う。
+    """
     start_date = pd.to_datetime(start_date) if start_date is not None else None
 
     # 質問ID -> 質問内容マップ（全店分）
@@ -208,6 +221,10 @@ def write_store_report_sheets(
 
     stores = sorted(bq_report["store_code"].unique().tolist())
 
+    spreadsheet = gc.open_by_url(spreadsheet_url)
+    existing_sheets = {ws.title: ws for ws in spreadsheet.worksheets()}
+
+    store_frames = {}
     for store_code in stores:
         questions_store = []
         for item in form_structure:
@@ -225,14 +242,59 @@ def write_store_report_sheets(
         if start_date is not None:
             df_store = df_store[df_store["timestamp"] > start_date]
 
-        df_store.rename(columns=question_mapping, inplace=True)
-        df_store.rename(columns=DICT_JP, inplace=True)
+        df_store = df_store.rename(columns=question_mapping)
+        df_store = df_store.rename(columns=DICT_JP)
 
-        try:
-            worksheet = spreadsheet.worksheet(str(store_code))
-            worksheet.clear()
-        except gspread.exceptions.WorksheetNotFound:
-            worksheet = spreadsheet.add_worksheet(
-                title=str(store_code), rows="5000", cols="30"
+        store_frames[str(store_code)] = df_store
+
+    # シートの新規作成・リサイズを1回のバッチリクエストにまとめる
+    structural_requests = []
+    for title, df_store in store_frames.items():
+        rows_needed = len(df_store) + 1  # ヘッダー分
+        cols_needed = max(len(df_store.columns), 1)
+
+        sheet = existing_sheets.get(title)
+        if sheet is None:
+            structural_requests.append(
+                {
+                    "addSheet": {
+                        "properties": {
+                            "title": title,
+                            "gridProperties": {
+                                "rowCount": max(rows_needed, 5000),
+                                "columnCount": max(cols_needed, 30),
+                            },
+                        }
+                    }
+                }
             )
-        set_with_dataframe(worksheet, df_store)
+        elif sheet.row_count < rows_needed or sheet.col_count < cols_needed:
+            structural_requests.append(
+                {
+                    "updateSheetProperties": {
+                        "properties": {
+                            "sheetId": sheet.id,
+                            "gridProperties": {
+                                "rowCount": max(sheet.row_count, rows_needed),
+                                "columnCount": max(sheet.col_count, cols_needed),
+                            },
+                        },
+                        "fields": "gridProperties.rowCount,gridProperties.columnCount",
+                    }
+                }
+            )
+
+    if structural_requests:
+        spreadsheet.batch_update({"requests": structural_requests})
+
+    # 全店舗分のクリアを1回のバッチリクエストにまとめる
+    spreadsheet.values_batch_clear(body={"ranges": list(store_frames.keys())})
+
+    # 全店舗分の書き込みを1回のバッチリクエストにまとめる
+    data = [
+        {"range": f"{title}!A1", "values": _values_for_sheet(df_store)}
+        for title, df_store in store_frames.items()
+    ]
+    spreadsheet.values_batch_update(
+        body={"valueInputOption": "USER_ENTERED", "data": data}
+    )
