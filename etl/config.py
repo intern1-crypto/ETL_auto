@@ -54,7 +54,7 @@ REPORT_FORM_ID_NEW = "1-g9wDUw5OJeUTbaMfoFk-XeP56HMQaIGSJ95XVZ6z98"
 # 店舗別日報シート書き出し（任意機能）
 # ---------------------------------------------------------------------------
 # 店舗ごとの日報を書き出すスプレッドシート URL。None の場合はスキップする。
-STORE_REPORT_SPREADSHEET_URL = None
+STORE_REPORT_SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/18F2dPFb_w32t1BWIdpzNXPqIjwEQwKsQ2_GBgdo8jgE/edit?gid=0#gid=0"
 # 書き出し対象の開始日時（この日時より後の timestamp のみ出力）。文字列 or None。
 STORE_REPORT_START_DATE = None
 
