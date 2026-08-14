@@ -196,7 +196,7 @@ def write_store_report_sheets(
     import gspread
 
     spreadsheet = gc.open_by_url(spreadsheet_url)
-    start_date = pd.to_datetime(start_date)
+    start_date = pd.to_datetime(start_date) if start_date is not None else None
 
     # 質問ID -> 質問内容マップ（全店分）
     question_mapping = {}
@@ -222,7 +222,8 @@ def write_store_report_sheets(
 
         df_store = df_report[QUESTIONS_COMMON + questions_store]
         df_store = df_store[df_store["store_code"] == store_code]
-        df_store = df_store[df_store["timestamp"] > start_date]
+        if start_date is not None:
+            df_store = df_store[df_store["timestamp"] > start_date]
 
         df_store.rename(columns=question_mapping, inplace=True)
         df_store.rename(columns=DICT_JP, inplace=True)
