@@ -55,10 +55,17 @@ def build_all():
         errors["report_new"] = e
         bq_report_new, df_report_new, form_structure_new = None, None, None
 
-    # daily・user は meetup と order に依存
+    try:
+        bq_mcs = mcs.build(gc)
+    except Exception as e:
+        logger.error("MCS の抽出に失敗", exc_info=True)
+        errors["mcs"] = e
+        bq_mcs = None
+
+    # ▼▼▼【ここに移動＆書き換え】daily の集計処理 ▼▼▼
     if df_order is not None and bq_meetup is not None:
         try:
-            df_daily = aggregate.build(df_order, bq_meetup)
+            df_daily = aggregate.build(df_order, bq_meetup, bq_mcs=bq_mcs)
         except Exception as e:
             logger.error("日次データ集計 (daily) の処理に失敗", exc_info=True)
             errors["daily"] = e
@@ -66,6 +73,7 @@ def build_all():
     else:
         logger.warning("日次データ集計 (daily): 依存データ（order/meetup）の取得失敗のためスキップ")
         df_daily = None
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
     try:
         bq_goal, bq_goal_monthly = goal.build(gc)
@@ -74,12 +82,6 @@ def build_all():
         errors["goal"] = e
         bq_goal, bq_goal_monthly = None, None
 
-    try:
-        bq_mcs = mcs.build(gc)
-    except Exception as e:
-        logger.error("MCS の抽出に失敗", exc_info=True)
-        errors["mcs"] = e
-        bq_mcs = None
 
     try:
         bq_srr = shiruru.build(gc)

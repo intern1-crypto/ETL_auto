@@ -37,6 +37,15 @@ def _aggregate_meetup(df_meetup_bq):
     ].sum()
     return df_daily_meetup.reset_index()
 
+# ▼▼▼【追加】日次MCSデータの集計関数 ▼▼▼
+def _aggregate_mcs(bq_mcs):
+    """MCS データを日付・店舗ごとに集計する（viewing: 視聴完了数の合計）。"""
+    df_daily_mcs = bq_mcs.copy()
+    df_daily_mcs["date"] = pd.to_datetime(df_daily_mcs["date"]).dt.date
+
+    df_daily_mcs = df_daily_mcs.groupby(["date", "store_code"])["viewing"].sum()
+    return df_daily_mcs.reset_index()
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 def _aggregate_visits_monthly(df_order):
     """来店データを月・店舗ごとに集計する（DU: DU_id のユニークカウント）。"""
@@ -175,33 +184,52 @@ def build_monthly(
     return df_monthly
 
 
-def build(df_order, df_meetup_bq):
-    """来店データ(df_order)と Meetup データ(df_meetup_bq)から df_daily を構築する。"""
+def build(df_order, df_meetup_bq, bq_mcs=None):
+    """来店データ(df_order)と Meetup データ(df_meetup_bq)、
+    MCS データ(bq_mcs、任意)から df_daily を構築する。
+    """
     df_daily_visits = _aggregate_visits(df_order)
     df_daily_meetup = _aggregate_meetup(df_meetup_bq)
 
-    # 外部結合し、欠損値を0で埋める
+    # 外部結合
     df_daily = pd.merge(
         df_daily_visits, df_daily_meetup, on=["date", "store_code"], how="outer"
     )
+
+    # MCS データが存在する場合はマージ
+    if bq_mcs is not None:
+        df_daily_mcs = _aggregate_mcs(bq_mcs)
+        df_daily = pd.merge(
+            df_daily, df_daily_mcs, on=["date", "store_code"], how="outer"
+        )
+
+    # 欠損値を0で埋める
     df_daily.fillna(0, inplace=True)
 
-    # 店舗番号から店舗名を付与し、カラム順を整える
+    # 店舗番号から店舗名を付与
     df_daily["store"] = df_daily["store_code"].map(inverse_store_dict)
-    df_daily = df_daily[
-        [
-            "date", "store_code", "store", "visit_total", "visit_du",
-            "attendance", "planned_attendance", "cancell",
-        ]
+
+    # カラム順を整える
+    columns = [
+        "date", "store_code", "store", "visit_total", "visit_du",
+        "attendance", "planned_attendance", "cancell",
     ]
+    if bq_mcs is not None:
+        columns += ["viewing"]
+    df_daily = df_daily[columns]
 
     # 店舗番号が有効でないレコードを消す
     df_daily = df_daily[(df_daily["store_code"] > 0) & (df_daily["store_code"] < 500)]
+
+    # みなと銀行店舗を消す（月次と同様に除外）
+    df_daily = df_daily[~df_daily['store_code'].isin([117, 120])]
 
     # 整数型に
     int_columns = [
         "visit_total", "visit_du", "attendance", "planned_attendance", "cancell",
     ]
+    if bq_mcs is not None:
+        int_columns += ["viewing"]
     df_daily[int_columns] = df_daily[int_columns].astype(int)
 
     return df_daily
