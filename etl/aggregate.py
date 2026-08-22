@@ -212,7 +212,7 @@ def build(df_order, df_meetup_bq, bq_mcs=None, bq_goal=None):
             ["date", "store_code"] + goal_columns
         ]
         df_daily = pd.merge(
-            df_daily, df_goal_daily, on=["date", "store_code"], how="left"
+            df_daily, df_goal_daily, on=["date", "store_code"], how="outer"
         )
     # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
