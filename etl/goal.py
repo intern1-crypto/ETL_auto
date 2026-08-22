@@ -49,8 +49,18 @@ def _build_daily_goal(ss_goal):
     df_daily_goal = pd.concat([df_ss_goal, df_ss_goal2], join="outer", ignore_index=True)
     df_daily_goal.drop_duplicates(inplace=True)
 
-    # 店舗名をもとに店舗番号をマッピング
-    df_daily_goal["店舗番号"] = df_daily_goal["店舗名"].map(store_dict)
+   # 店舗名をもとに店舗番号をマッピング（前後の空白を除去してマッチング）
+    if "店舗番号" in df_daily_goal.columns and df_daily_goal["店舗番号"].notnull().any():
+        df_daily_goal["店舗番号"] = df_daily_goal["店舗番号"].fillna(
+            df_daily_goal["店舗名"].astype(str).str.strip().map(store_dict)
+        )
+    else:
+        # 店舗名の表記揺れ（前後の空白、「店」の有無）に対応
+        cleaned_store_name = df_daily_goal["店舗名"].astype(str).str.strip()
+        df_daily_goal["店舗番号"] = cleaned_store_name.map(store_dict).fillna(
+            cleaned_store_name.apply(lambda x: store_dict.get(x + "店") if not x.endswith("店") else store_dict.get(x[:-1]))
+        )
+
     if df_daily_goal["店舗名"].count() != df_daily_goal["店舗番号"].count():
         unmapped = df_daily_goal[df_daily_goal["店舗番号"].isnull()]["店舗名"].unique()
         logger.warning("goal: 店舗マッピングに漏れあり: %s", unmapped)
