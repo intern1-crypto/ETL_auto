@@ -203,15 +203,18 @@ def build(df_order, df_meetup_bq, bq_mcs=None, bq_goal=None):
             df_daily, df_daily_mcs, on=["date", "store_code"], how="outer"
         )
 
-    # ▼▼▼【追加】日次目標値（MCS目標）が存在する場合はマージ ▼▼▼
+    # 目標値カラムの定義
+    goal_columns = ["total_goal", "DU_goal", "Meetup_goal", "SHIRURU_goal", "MCS_goal"]
+
+    # ▼▼▼【修正】日次の各目標値をすべてマージ ▼▼▼
     if bq_goal is not None:
         df_goal_daily = bq_goal.rename(columns={"target_day": "date"})[
-            ["date", "store_code", "MCS_goal"]
+            ["date", "store_code"] + goal_columns
         ]
         df_daily = pd.merge(
             df_daily, df_goal_daily, on=["date", "store_code"], how="left"
         )
-    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
     # 欠損値を0で埋める
     df_daily.fillna(0, inplace=True)
@@ -233,7 +236,7 @@ def build(df_order, df_meetup_bq, bq_mcs=None, bq_goal=None):
     if bq_mcs is not None:
         columns += ["viewing"]
     if bq_goal is not None:
-        columns += ["MCS_goal"]
+        columns += goal_columns  # 【修正】全目標カラムを追加
     df_daily = df_daily[columns]
 
     # 店舗番号が有効でないレコードを消す
@@ -254,8 +257,8 @@ def build(df_order, df_meetup_bq, bq_mcs=None, bq_goal=None):
         int_columns += ["viewing"]
     df_daily[int_columns] = df_daily[int_columns].astype(int)
 
-    # MCS_goal は小数（日割り計算値）の可能性があるため float 型に設定
+    # 目標値は小数（日割り値）の可能性があるため float 型に設定
     if bq_goal is not None:
-        df_daily["MCS_goal"] = df_daily["MCS_goal"].astype(float)
+        df_daily[goal_columns] = df_daily[goal_columns].astype(float)  # 【修正】全目標カラムを変換
 
     return df_daily
