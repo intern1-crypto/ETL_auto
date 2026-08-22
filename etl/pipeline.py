@@ -76,11 +76,36 @@ def build_all():
     # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
     try:
+        bq_mcs = mcs.build(gc)
+    except Exception as e:
+        logger.error("MCS の抽出に失敗", exc_info=True)
+        errors["mcs"] = e
+        bq_mcs = None
+
+    # ▼▼▼【ここに移動】daily 集計より先に目標値を取得 ▼▼▼
+    try:
         bq_goal, bq_goal_monthly = goal.build(gc)
     except Exception as e:
         logger.error("目標値 (goal) の抽出に失敗", exc_info=True)
         errors["goal"] = e
         bq_goal, bq_goal_monthly = None, None
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+    # daily の集計処理（bq_goal を引数に追加）
+    if df_order is not None and bq_meetup is not None:
+        try:
+            df_daily = aggregate.build(
+                df_order, bq_meetup, bq_mcs=bq_mcs, bq_goal=bq_goal
+            )
+        except Exception as e:
+            logger.error("日次データ集計 (daily) の処理に失敗", exc_info=True)
+            errors["daily"] = e
+            df_daily = None
+    else:
+        logger.warning(
+            "日次データ集計 (daily): 依存データ（order/meetup）の取得失敗のためスキップ"
+        )
+        df_daily = None
 
 
     try:

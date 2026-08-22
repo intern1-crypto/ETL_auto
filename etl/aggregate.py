@@ -184,9 +184,9 @@ def build_monthly(
     return df_monthly
 
 
-def build(df_order, df_meetup_bq, bq_mcs=None):
+def build(df_order, df_meetup_bq, bq_mcs=None, bq_goal=None):
     """来店データ(df_order)と Meetup データ(df_meetup_bq)、
-    MCS データ(bq_mcs、任意)から df_daily を構築する。
+    MCS データ(bq_mcs、任意)・目標値データ(bq_goal、任意)から df_daily を構築する。
     """
     df_daily_visits = _aggregate_visits(df_order)
     df_daily_meetup = _aggregate_meetup(df_meetup_bq)
@@ -203,6 +203,16 @@ def build(df_order, df_meetup_bq, bq_mcs=None):
             df_daily, df_daily_mcs, on=["date", "store_code"], how="outer"
         )
 
+    # ▼▼▼【追加】日次目標値（MCS目標）が存在する場合はマージ ▼▼▼
+    if bq_goal is not None:
+        df_goal_daily = bq_goal.rename(columns={"target_day": "date"})[
+            ["date", "store_code", "MCS_goal"]
+        ]
+        df_daily = pd.merge(
+            df_daily, df_goal_daily, on=["date", "store_code"], how="left"
+        )
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
     # 欠損値を0で埋める
     df_daily.fillna(0, inplace=True)
 
@@ -211,25 +221,41 @@ def build(df_order, df_meetup_bq, bq_mcs=None):
 
     # カラム順を整える
     columns = [
-        "date", "store_code", "store", "visit_total", "visit_du",
-        "attendance", "planned_attendance", "cancell",
+        "date",
+        "store_code",
+        "store",
+        "visit_total",
+        "visit_du",
+        "attendance",
+        "planned_attendance",
+        "cancell",
     ]
     if bq_mcs is not None:
         columns += ["viewing"]
+    if bq_goal is not None:
+        columns += ["MCS_goal"]
     df_daily = df_daily[columns]
 
     # 店舗番号が有効でないレコードを消す
     df_daily = df_daily[(df_daily["store_code"] > 0) & (df_daily["store_code"] < 500)]
 
     # みなと銀行店舗を消す（月次と同様に除外）
-    df_daily = df_daily[~df_daily['store_code'].isin([117, 120])]
+    df_daily = df_daily[~df_daily["store_code"].isin([117, 120])]
 
     # 整数型に
     int_columns = [
-        "visit_total", "visit_du", "attendance", "planned_attendance", "cancell",
+        "visit_total",
+        "visit_du",
+        "attendance",
+        "planned_attendance",
+        "cancell",
     ]
     if bq_mcs is not None:
         int_columns += ["viewing"]
     df_daily[int_columns] = df_daily[int_columns].astype(int)
+
+    # MCS_goal は小数（日割り計算値）の可能性があるため float 型に設定
+    if bq_goal is not None:
+        df_daily["MCS_goal"] = df_daily["MCS_goal"].astype(float)
 
     return df_daily
