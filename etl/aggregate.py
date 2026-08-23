@@ -31,6 +31,12 @@ def _aggregate_meetup(df_meetup_bq):
     # キャンセル有無を1,0に
     df_daily_meetup["cancell"] = df_daily_meetup["cancell"].notnull().astype(int)
 
+    # Pickup Meetup対応（pickup_flag: 1なら2倍、0なら1倍）
+    if "pickup_flag" in df_daily_meetup.columns:
+        weight = df_daily_meetup["pickup_flag"].fillna(0) + 1
+        df_daily_meetup["attendance"] = df_daily_meetup["attendance"] * weight
+        df_daily_meetup["planned_attendance"] = df_daily_meetup["planned_attendance"] * weight
+
     # date, store_code 毎に参加・参加予定・キャンセルのそれぞれの合計
     df_daily_meetup = df_daily_meetup.groupby(["date", "store_code"])[
         ["attendance", "planned_attendance", "cancell"]
