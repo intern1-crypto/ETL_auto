@@ -12,12 +12,14 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from etl import auth, bigquery_writer, config, pipeline, report
+from etl.lineworks import LineWorksHandler
 
 logging.basicConfig(
     level=logging.WARNING,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+logging.getLogger().addHandler(LineWorksHandler())
 
 
 def main():
@@ -80,4 +82,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        logging.critical("main() で未処理の例外が発生しました", exc_info=True)
+        raise

@@ -27,6 +27,9 @@ SERVICE_ACCOUNT_FILE = CREDENTIALS_DIR / "gcp-secret-key.json"
 # Google フォーム（日報）読み取り用の鍵。上と同じサービスアカウントを使用する。
 FORMS_SERVICE_ACCOUNT_FILE = SERVICE_ACCOUNT_FILE
 
+# LINE WORKSの認証情報。
+LINEWORKS_SECRET_FILE = CREDENTIALS_DIR / "lineworks_secret.json"
+
 # ---------------------------------------------------------------------------
 # Google Drive の CSV フォルダ ID
 # ※サービスアカウントのメールアドレスに対象フォルダの閲覧権限を共有しておくこと
@@ -78,3 +81,9 @@ TABLE_NAMES = {
     "mcs": "MCS",
     "shiruru": "SHIRURU",
 }
+
+# ---------------------------------------------------------------------------
+# LINE WORKS Bot
+# ---------------------------------------------------------------------------
+LINEWORKS_BOT_ID = "4453337"  # 電子日報bot
+LINEWORKS_CHANNEL_ID = "1467c65c-ceba-6198-0348-8c59a4744de1"

@@ -9,3 +9,4 @@ pyarrow
 db-dtypes
 pandas-gbq
 jupyter
+requests
