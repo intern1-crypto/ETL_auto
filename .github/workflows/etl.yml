@@ -32,5 +32,10 @@ jobs:
           mkdir -p credentials
           echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' > credentials/gcp-secret-key.json
 
+      - name: Write LINE WORKS secret
+        run: |
+          mkdir -p credentials
+          echo '${{ secrets.LINEWORKS_API_KEY }}' > credentials/lineworks_secret.json
+
       - name: Run ETL
         run: python main.py
