@@ -86,4 +86,4 @@ TABLE_NAMES = {
 # LINE WORKS Bot
 # ---------------------------------------------------------------------------
 LINEWORKS_BOT_ID = "4453337"  # 電子日報bot
-LINEWORKS_CHANNEL_ID = "1467c65c-ceba-6198-0348-8c59a4744de1"
+LINEWORKS_CHANNEL_ID = "fff943fc-6375-8eec-3f02-c7a12e2eff72" # DXチームグル
