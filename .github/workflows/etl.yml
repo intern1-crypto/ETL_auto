@@ -39,3 +39,11 @@ jobs:
 
       - name: Run ETL
         run: python main.py
+
+      - name: Notify on workflow failure
+        if: failure()
+        run: |
+          python -c "
+          from etl.lineworks import send_message
+          send_message('ETL Pipeline ワークフローが失敗しました: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}')
+          "
